@@ -72,28 +72,28 @@ func InitConfig () {
 	CfgData.LogState = *flag.Bool ("l", CfgData.LogState, "turn on file-based logging")
 	
 	// read configuration from file
-	log.Println ("[SID] using configuration file '" + CfgData.CfgFile + "'")
+	log.Println ("[config] using configuration file '" + CfgData.CfgFile + "'")
 	cfg,err := os.Open (CfgData.CfgFile)
 	if err != nil {
-		log.Println ("[SID] configuration file not available -- using defaults")
+		log.Println ("[config] configuration file not available -- using defaults")
 		return
 	}
 	// configuration file exists: read parameters
  	rdr := bufio.NewReader (cfg)
 	err = parser.Parser (rdr, callback)
 	if err != nil {
-		log.Printf ("[SID] error reading configuration file: %v\n", err)
+		log.Printf ("[config] error reading configuration file: %v\n", err)
 		os.Exit (1)
 	}
-	log.Println ("[SID] configuration done.")
+	log.Println ("[config] configuration complete.")
 
 	// turn on logging if specified on command line or config file
 	if CfgData.LogState {
-		log.Println ("[SID] file-based logging to '" + CfgData.LogFile + "'")
+		log.Println ("[config] file-based logging to '" + CfgData.LogFile + "'")
 		if f,err := os.Create (CfgData.LogFile); err == nil {
 			log.SetOutput (f)
 		} else {
-			log.Println ("[SID] can't enable file-based logging!")
+			log.Println ("[config] can't enable file-based logging!")
 			CfgData.LogState = false
 		}
 	}
@@ -104,12 +104,12 @@ func InitConfig () {
 	CfgData.HttpsPort = *flag.Int  ("s", CfgData.HttpsPort, "HTTPS session port")
 	
 	// list current configuration data
-	log.Println ("==========< configuration >===============")
-	log.Println ("Configuration file: " + CfgData.CfgFile)
-	log.Println ("Port for control sessions: " + strconv.Itoa(CfgData.CtrlPort))
-	log.Println ("Port for HTTP sessions: " + strconv.Itoa(CfgData.HttpPort))
-	log.Println ("Port for HTTPS sessions: " + strconv.Itoa(CfgData.HttpsPort))
-	log.Println ("==========================================")
+	log.Println ("[config] !==========< configuration >===============")
+	log.Println ("[config] !Configuration file: " + CfgData.CfgFile)
+	log.Println ("[config] !Port for control sessions: " + strconv.Itoa(CfgData.CtrlPort))
+	log.Println ("[config] !Port for HTTP sessions: " + strconv.Itoa(CfgData.HttpPort))
+	log.Println ("[config] !Port for HTTPS sessions: " + strconv.Itoa(CfgData.HttpsPort))
+	log.Println ("[config] !==========================================")
 }
 
 //---------------------------------------------------------------------
