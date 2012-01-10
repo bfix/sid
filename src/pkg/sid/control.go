@@ -33,9 +33,10 @@ import (
 )
 
 ///////////////////////////////////////////////////////////////////////
-// Stateless control service instance
+// Control service instance
 
 type ControlSrv struct  {
+	Ch		chan bool			// channel to invoker
 }
 
 ///////////////////////////////////////////////////////////////////////
@@ -81,10 +82,14 @@ func (c *ControlSrv) Process (client net.Conn) {
 						b.Flush()
 						cmd,_ = readCmd (b)
 						if cmd == "YES" {
-							log.Print ("[ctrl] Terminating application")
+							log.Println ("[ctrl] Terminating application")
 							b.WriteString ("Terminating application...")
 							b.Flush()
-							os.Exit (0)
+							c.Ch <- true
+						} else {
+							log.Println ("[ctrl] Response '" + cmd + "' -- Termination aborted!")
+							b.WriteString ("Wrong response -- Termination aborted!")
+							b.Flush()
 						}
 						
 			//-------------------------------------------------

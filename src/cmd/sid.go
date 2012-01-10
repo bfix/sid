@@ -52,6 +52,17 @@ func main() {
 	// (turns on file-based logging if specified on command line) 
 	sid.InitConfig ()
 	
+	// create control service.
+	ch := make (chan bool)
+	ctrl := &sid.ControlSrv { ch }
+	
+	// create HTTP service
+	http := sid.NewHttpSrv()
+	
 	// start network services
-	network.Run ("tcp", ":" + strconv.Itoa(sid.CfgData.CtrlPort), &sid.ControlSrv{})
+	network.RunService ("tcp", ":" + strconv.Itoa(sid.CfgData.CtrlPort), ctrl)
+	network.RunService ("tcp", ":" + strconv.Itoa(sid.CfgData.HttpPort), http)
+	
+	// wait for termination
+	<-ch
 }
