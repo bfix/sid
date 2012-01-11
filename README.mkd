@@ -2,7 +2,7 @@
 SID: Server In Disguise
 =======================
 
-(c) 2010-2012 Bernd Fix   >Y<
+(c) 2011-2012 Bernd Fix   >Y<
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -16,3 +16,78 @@ General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+Prerequisites:
+==============
+
+GOLANG
+------
+
+This application is written in the GO programming language developed
+by Rob Pike and Ken Thompsen at Google, Inc. The software is distributed
+as source code and can be build on different operating systems and hardware
+architectures. Visit <http://golang.org> to learn more about GO.
+
+To install GO on your computer you must have the usual C Compiler tools
+installed; on Debian this requires the packages *awk*, *bison*, *gcc* and
+*make* (see <http://golang.org/doc/install.html#ctools> for more info) and a
+working "Mercurial" (source control management software) on your box (for more
+info see <http://golang.org/doc/install.html#mercurial>).
+
+Use a directory of your choice (I recommend to use the `/opt` directory
+if you are allowed to create sub-directories under `/opt`) and then to
+change into this directory. Next you fetch a snapshot of the GO
+repository and compile and test it:
+
+	$ cd /opt
+	$ hg clone https://go.googlecode.com/hg/ go
+	$ cd go
+	$ hg update release
+	$ cd src
+	$ ./all.bash
+
+If you see a 'ALL TESTS PASSED' message, your build was successful. You can
+now add environment variables for GO; it is recommended to add these lines
+to a start-up file (like `.bashrc`) after you changed it to match your soft-
+and hardware environment:
+
+	export GOOS=linux
+	export GOARCH=386
+	export GOROOT=/opt/go
+	export PATH=${PATH}:${GOROOT}/bin
+
+GOSPEL
+------
+
+GOSPEL is the "GO SPEcial Library" and an Open-Source project. To install
+the required GOSPEL packages for SID on your computer, you need a working
+*git* installation; then simply issue the following commands:
+
+	$ mkdir /opt/go-libs
+	$ cd /opt/go-libs
+	$ git clone git://github.com/bfix/gospel gospel
+	$ cd gospel/src
+	$ make install
+
+N.B.: Because of dependencies you must run `make install` first before you
+can run `make` later (if required after code changes in the library).
+
+Building SID
+============
+
+To build the SID executable, change into the source directory and make the
+target:
+
+	$ cd src
+	$ make
+
+The executable is named 'sid' and resides in the source directory. Copy it
+to the directory of your choice.
+
+
+Configuring SID
+===============
+
+Copy the example configuration file 'runtime/sid.cfg' to the runtime directory
+you want to use for SID. Edit the configuration file to match your local
+requirements.
