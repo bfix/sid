@@ -1,6 +1,6 @@
 #!/bin/bash
 
 cd runtime
-../bin/cmd
+../src/sid
 
 exit 0

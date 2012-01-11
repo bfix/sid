@@ -1,7 +1,8 @@
 /*
  * Handle HTTP session: Every session is associated with two queues
- * for incoming and outgoing stream data and a handler in between to
- * read/write data from these queues.
+ * for incoming and outgoing stream data and a handler inbetween to
+ * read/write data from these queues after applying the needed
+ * transformations.
  *
  * (c) 2012 Bernd Fix   >Y<
  *
@@ -19,7 +20,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-package sid
+package main
 
 ///////////////////////////////////////////////////////////////////////
 // Import external declarations.
@@ -74,7 +75,7 @@ func (s *HttpSrv) Process (client net.Conn) {
 		// get data from client.
 		n,err := b.Read (inData)
 		if err != nil {
-			log.Println ("[http] Read failed: " + err.String())
+			log.Printf ("[http] Read failed: (%d) '%s'\n", n, err.String())
 			continue
 		}
 		inStr := string(inData)

@@ -29,7 +29,6 @@ package main
 // Import external declarations.
 
 import (
-	"sid"
 	"strconv"
 	"gospel/network"
 )
@@ -50,18 +49,18 @@ func main() {
 	
 	// handle configuration file and command line options
 	// (turns on file-based logging if specified on command line) 
-	sid.InitConfig ()
+	InitConfig ()
 	
 	// create control service.
 	ch := make (chan bool)
-	ctrl := &sid.ControlSrv { ch }
+	ctrl := &ControlSrv { ch }
 	
 	// create HTTP service
-	http := sid.NewHttpSrv()
+	http := NewHttpSrv()
 	
 	// start network services
-	network.RunService ("tcp", ":" + strconv.Itoa(sid.CfgData.CtrlPort), ctrl)
-	network.RunService ("tcp", ":" + strconv.Itoa(sid.CfgData.HttpPort), http)
+	network.RunService ("tcp", ":" + strconv.Itoa(CfgData.CtrlPort), ctrl)
+	network.RunService ("tcp", ":" + strconv.Itoa(CfgData.HttpPort), http)
 	
 	// wait for termination
 	<-ch
