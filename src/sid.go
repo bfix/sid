@@ -29,8 +29,16 @@ package main
 // Import external declarations.
 
 import (
+	"log"
 	"strconv"
 	"gospel/network"
+)
+
+///////////////////////////////////////////////////////////////////////
+// Package constants.
+
+const (
+	verbose = true			// verbose logging output
 )
 
 ///////////////////////////////////////////////////////////////////////
@@ -38,6 +46,11 @@ import (
 
 func main() {
 
+	log.Println ("[sid] ==============================")
+	log.Println ("[sid] SID v.01 -- Server In Disguise")
+	log.Println ("[sid] (c) 2012 Bernd R. Fix      >Y<")
+	log.Println ("[sid] ==============================")
+	
 	//-----------------------------------------------------------------
 	// Handle SID configuration: read configuration data from config
 	// file 'sid.cfg' in current directory (can be overridden by the
@@ -51,6 +64,10 @@ func main() {
 	// (turns on file-based logging if specified on command line) 
 	InitConfig ()
 	
+	//-----------------------------------------------------------------
+	//	Start network services
+	//-----------------------------------------------------------------
+
 	// create control service.
 	ch := make (chan bool)
 	ctrl := &ControlSrv { ch }
@@ -64,4 +81,5 @@ func main() {
 	
 	// wait for termination
 	<-ch
+	log.Println ("[sid] Application terminated.")
 }
