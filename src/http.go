@@ -28,15 +28,7 @@ package main
 import (
 	"net"
 	"log"
-	"bufio"
 	"strings"
-)
-
-///////////////////////////////////////////////////////////////////////
-// Constants
-
-const (
-	verbose = true
 )
 
 ///////////////////////////////////////////////////////////////////////
@@ -67,28 +59,59 @@ func (s *HttpSrv) Process (client net.Conn) {
 
 	// allocate input buffer
 	inData := make ([]byte, 32768)
-	// create reader/writer instance
-	b := bufio.NewReadWriter (bufio.NewReader(client), bufio.NewWriter(client))
+	
+	//=================================================================
+	//	Instantiate Cover (content transformer)
+	//=================================================================
+	
+	// create channels for session
+	in := make (chan []byte)
+	out := make (chan []byte)
+	ctrl := make (chan bool)
+	
+	// start content transformer
+	hdlr := NewCover()
+	go hdlr.Handle (in, out, ctrl)
+
+	//=================================================================
 	
 	// handle session
+	client.SetTimeout (1)
+	defer client.Close()
 	for {
-		// get data from client.
-		n,err := b.Read (inData)
-		if err != nil {
-			log.Printf ("[http] Read failed: (%d) '%s'\n", n, err.String())
-			continue
-		}
-		inStr := string(inData)
-		
-		// optional logging
-		if verbose {
-			log.Printf ("[http] %d bytes read.\n", n)
-			log.Println ("[http]: '" + inStr + "'")
-		}
-		
-		
+		// handle incoming and outgoing content and control info
+		select {
+			// handle pending response data
+			case outData := <- out:
+				log.Printf ("[http] Pending response data (%d bytes)\n", len(outData))
+				// send data to client.
+				if !sentData (client, outData, "http") {
+					// terminate session on failure
+					return
+				}
+				
+			// handle control data
+			case flag := <- ctrl:
+				if flag {
+					// terminate this handler.
+					log.Println ("[http] CTRL termination")
+					return
+				}
+
+			default:
+				// get data from client.
+				n,ok := rcvData (client, inData, "http")
+				if !ok {
+					// signal closed client connection
+					ctrl <- true
+				}
+				// send pending client request
+				if n > 0 {
+					// sent incoming request data to dresser
+					in <- inData [0:n-1]
+				}
+		} 		
 	}
-	client.Close()
 }
 
 //---------------------------------------------------------------------
