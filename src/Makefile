@@ -9,5 +9,7 @@ GOFILES=\
 	control.go \
 	doc.go \
 	http.go \
+	cover.go \
+	net.go \
 
 include $(GOROOT)/src/Make.cmd
