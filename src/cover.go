@@ -36,9 +36,14 @@ import (
  * State information for cover server connection.
  */
 type state struct {
-	reqBalance	int			// size balance for request translation
-	respBalance	int			// size balance for response translation
-	binResp		bool		// pending response is binary data?
+	reqBalance		int			// size balance for request translation
+	reqRessource	string		// ressource requested
+	respBalance		int			// size balance for response translation
+	respHdr			bool		// response header parsed?
+	respCont		bool		// response continuation?
+	respSize		int			// expected response size (total length)
+	respType		string		// format identifier for response content (mime type)
+	respBinary		bool		// pending response is binary data?
 }
 
 //---------------------------------------------------------------------
@@ -48,6 +53,7 @@ type state struct {
 type Cover struct {
 	server		string					// "host:port" of cover server
 	states		map[net.Conn]*state		// state of active connections
+	htmls		map[string]string		// HTML page replacements
 }
 
 ///////////////////////////////////////////////////////////////////////
@@ -58,10 +64,8 @@ type Cover struct {
  * @return *Cover - pointer to cover server instance
  */
 func NewCover() *Cover {
-	return &Cover {
-		server:		"www.picpost.com:80",
-		states:		make (map[net.Conn]*state),
-	}
+	// currently we only have one cover server implementation
+	return NewCvrPicpost()
 }
 
 ///////////////////////////////////////////////////////////////////////
@@ -81,12 +85,17 @@ func (c *Cover) connect () net.Conn {
 	}
 	logger.Println (logger.INFO, "[cover] connected to cover server...")
 	
-	// allocate state information and add to
-	// state list
+	// allocate state information and add to state list
+	// initialize struct with default data
 	c.states[conn] = &state {
 		reqBalance:		0,
+		reqRessource:	"",
 		respBalance:	0,
-		binResp:		false,
+		respHdr:		false,
+		respCont:		false,
+		respSize:		0,
+		respType:		"text/html",
+		respBinary:		false,
 	} 
 	return conn
 }
@@ -127,8 +136,8 @@ func (c *Cover) GetState (conn net.Conn) *state {
  */
 func (c *Cover) xformReq (s *state, data []byte, num int) []byte {
 
-	inStr := string(data)
-	logger.Printf (logger.INFO, "[http] %d bytes received from cover server.\n", len(data))
+	inStr := string(data[0:num])
+	logger.Printf (logger.DBG_HIGH, "[http] %d bytes received from cover server.\n", num)
 	logger.Println (logger.DBG_ALL, "[http] Incoming response:\n" + inStr + "\n")
 
 	// assemble transformed request
@@ -144,7 +153,6 @@ func (c *Cover) xformReq (s *state, data []byte, num int) []byte {
 			break
 		}
 		line := string(b)
-		//log.Printf ("[cover] +%s\n", line)
 		
 		// transform request data
 		switch {
@@ -166,6 +174,7 @@ func (c *Cover) xformReq (s *state, data []byte, num int) []byte {
 				if strings.HasPrefix (uri, "/&&") {
 				}
 				// assemble new ressource request
+				s.reqRessource = uri
 				req += "GET " + uri + " " + parts[2] + "\n"
 				// keep balance
 				s.reqBalance += (len(parts[1]) - len(uri))
@@ -225,7 +234,64 @@ func (c *Cover) xformReq (s *state, data []byte, num int) []byte {
  * @return []data - transformed response (sent to client)
  */
 func (c *Cover) xformResp (s *state, data []byte, num int) []byte {
-	logger.Printf (logger.INFO, "[cover] %d bytes received from client.\n", len(data))
-	logger.Println (logger.DBG_ALL, "[cover] Incoming request:\n" + string(data) + "\n")
-	return data
+
+	inStr := string(data[0:num])
+	logger.Printf (logger.DBG_HIGH, "[cover] %d bytes received from cover server.\n", num)
+	logger.Println (logger.DBG_ALL, "[cover] Incoming response:\n" + inStr + "\n")
+
+	rdr := bufio.NewReader (strings.NewReader (inStr))
+	resp := ""
+	if !s.respHdr {
+		// start of new response encountered: parse header fields
+		for {
+			// get next line (terminated by line break); if the
+			// line is continued on the next block
+			b,broken,_ := rdr.ReadLine()
+			if b == nil || len(b) == 0 {
+				if broken {
+					// header is not complete: wait for next response fragment
+					return data
+				}
+				// we have parsed the header; continue with body
+				s.respHdr = true
+				break
+			}
+			line := string(b)
+			// assemble response
+			resp += line + "\n"
+			
+			// parse response header
+			switch {
+				//-----------------------------------------------------
+				// Content-Type:
+				//-----------------------------------------------------
+				case strings.HasPrefix (line, "Content-Type: "):
+					// split line into parts
+					parts := strings.Split (line, " ")
+					s.respType = strings.TrimRight (parts[1], ";")
+					logger.Println (logger.DBG_HIGH, "[cover] response type: " + s.respType)
+					
+					// set response representation
+					s.respBinary = false
+					switch {
+						case strings.HasPrefix (s.respType, "img"):
+							s.respBinary = true
+					}
+					logger.Printf (logger.DBG_HIGH, "[cover] response is binary? %v\n",s.respBinary)
+			}
+		}
+		// add the delimiter (empty) line
+		resp += "\n"
+	}
+
+	// we have parsed the response header; now process the response body
+	if strings.HasPrefix (s.respType, "text/") {
+		// do content translation/assembly
+		ressources := parseHTML (rdr)
+		return assembleHTML (s, ressources, num)
+	} 
+	
+	//return untranslated response
+	logger.Println (logger.ERROR, "[cover] Unhandled response!")
+	return data		
 }
