@@ -55,7 +55,7 @@ func (c *ControlSrv) Process (client net.Conn) {
 
 		// show control menu			
 		b.WriteString ("\n-----------------------------------\n")
-		b.WriteString ("set (L)og level [" + logger.GetLogLevel() + "]\n")
+		b.WriteString ("Change (L)og level [" + logger.GetLogLevel() + "]\n")
 		b.WriteString ("(T)erminate application\n")
 		b.WriteString ("e(X)it\n")
 		b.WriteString ("-----------------------------------\n")
@@ -89,6 +89,14 @@ func (c *ControlSrv) Process (client net.Conn) {
 						}
 						
 			//-------------------------------------------------
+			// Change logging level
+			//-------------------------------------------------
+			case "L":	b.WriteString ("Enter new log level (ERROR,WARN,INFO,DBG_HIGH,DBG,DBG_ALL): ")
+						b.Flush()
+						cmd,_ = readCmd (b)
+						logger.SetLogLevelFromName (cmd)
+						
+			//-------------------------------------------------
 			//	Quit control session
 			//-------------------------------------------------
 			case "X":	repeat = false
@@ -109,7 +117,11 @@ func (c *ControlSrv) Process (client net.Conn) {
  * @return bool - protcol handled?
  */
 func (c *ControlSrv) CanHandle (protocol string) bool {
-	return strings.HasPrefix (protocol, "tcp")
+	rc := strings.HasPrefix (protocol, "tcp")
+	if !rc {
+		logger.Println (logger.WARN, "[control] Unsupported protocol '" + protocol + "'")
+	}
+	return rc
 }
 
 //---------------------------------------------------------------------
@@ -119,7 +131,11 @@ func (c *ControlSrv) CanHandle (protocol string) bool {
  * @return bool - local address?
  */
 func (c *ControlSrv) IsAllowed (addr string) bool {
-	return strings.HasPrefix (addr, "127.0.0.1")
+	rc := strings.HasPrefix (addr, "127.0.0.1")
+	if !rc {
+		logger.Println (logger.WARN, "[control] Unsupported remote address '" + addr + "'")
+	}
+	return rc
 }
 
 //---------------------------------------------------------------------
