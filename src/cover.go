@@ -56,78 +56,25 @@ func NewCover() *Cover {
 // Public methods
 
 /*
- * Handle (transform) incoing client requests and outgoing cover
- * server responses over specified channels
- * @param in chan []byte - channel for incoming client requests
- * @param out chan []byte - channel for outgoing cover server responses
- * @param ctrl chan bool - control channel to signal closed/closing connections
+ * Connect to cover server
+ * @return net.Conn - connection to cover server (or nil)
  */
-func (c *Cover) Handle (in, out chan []byte, ctrl chan bool) {
-
-	// open a new connection to the cover server
+func (c *Cover) connect () net.Conn {
+	// establish connection
 	conn,err := net.Dial ("tcp", c.server)
-	defer conn.Close()
 	if err != nil {
 		// can't connect
 		log.Printf ("[cover] failed to connect to cover server: %s\n", err.String())
-		// signal session close.
-		ctrl <- true
-		return
+		return nil
 	}
 	log.Println ("[cover] connected to cover server...")
-	
-	// handle cover session
-	inData := make ([]byte, 32768)
-	conn.SetTimeout (1)
-	for {
-		select {
-			// handle client request
-			case inData = <- in:
-				n := len(inData)
-				// optional logging
-				if verbose {
-					log.Printf ("[cover] %d bytes received from client.\n", n)
-					log.Println ("[cover] Incoming request:\n" + string(inData) + "\n")
-				}
-				// transform request
-				outData := c.xformReq (inData, n)
-				// sent request to cover server
-				sentData (conn, outData, "cover")
-				
-			// handle control data
-			case flag := <- ctrl:
-				if flag {
-					// connection reset by peer
-					log.Println ("[cover] connection reset by peer")
-					return
-				}
-
-			default:
-				// get data from cover server.
-				n,ok := rcvData (conn, inData, "cover")
-				if !ok {
-					// signal closed cover connection
-					ctrl <- true
-				}
-				// send pending client response
-				if n > 0 {
-					if verbose {
-						log.Printf ("[cover] %d bytes received from cover server.\n", n)
-						log.Println ("[cover] Incoming response:\n" + string(inData) + "\n")
-					}
-					// transform response
-					outData := c.xformResp (inData, n) 
-					// sent incoming response data to client
-					out <- outData
-				}
-		}
-	}
+	return conn
 }
 
 //---------------------------------------------------------------------
 /*
  * Transform client request: this is supposed to work on fragmented
- * requests if necessary (currently not supported)
+ * requests if necessary (currently not really supported)
  * @param data []byte - request data from client
  * @param num int - length of request in bytes
  * @return []byte - transformed request (sent to cover server)
