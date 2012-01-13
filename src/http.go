@@ -57,60 +57,77 @@ func NewHttpSrv() *HttpSrv {
  */
 func (s *HttpSrv) Process (client net.Conn) {
 
-	// allocate input buffer
-	inData := make ([]byte, 32768)
-	
-	//=================================================================
-	//	Instantiate Cover (content transformer)
-	//=================================================================
-	
-	// create channels for session
-	in := make (chan []byte)
-	out := make (chan []byte)
-	ctrl := make (chan bool)
-	
-	// start content transformer
-	hdlr := NewCover()
-	go hdlr.Handle (in, out, ctrl)
-
-	//=================================================================
-	
-	// handle session
-	client.SetTimeout (1)
+	// close client connection on function exit
 	defer client.Close()
-	for {
-		// handle incoming and outgoing content and control info
-		select {
-			// handle pending response data
-			case outData := <- out:
-				log.Printf ("[http] Pending response data (%d bytes)\n", len(outData))
-				// send data to client.
-				if !sentData (client, outData, "http") {
-					// terminate session on failure
-					return
-				}
-				
-			// handle control data
-			case flag := <- ctrl:
-				if flag {
-					// terminate this handler.
-					log.Println ("[http] CTRL termination")
-					return
-				}
 
-			default:
-				// get data from client.
-				n,ok := rcvData (client, inData, "http")
-				if !ok {
-					// signal closed client connection
-					ctrl <- true
-				}
-				// send pending client request
-				if n > 0 {
-					// sent incoming request data to dresser
-					in <- inData [0:n-1]
-				}
-		} 		
+	// allocate buffer
+	data := make ([]byte, 32768)
+	
+	//	Instantiate Cover (content transformer)
+	hdlr := NewCover()
+	
+	// open a new connection to the cover server
+	cover := hdlr.connect ()
+	if cover == nil {
+		// failed to open connection to cover server
+		return
+	}
+	// close connection to cover server on exit
+	defer cover.Close()
+
+	// don't block read/write operations on socket buffers
+	client.SetTimeout (1)
+	cover.SetTimeout (1)
+	
+	// handle session loop
+	for {
+		//-------------------------------------------------------------
+		//	Upstream message passing
+		//-------------------------------------------------------------
+		
+		// get data from cover server.
+		n,ok := rcvData (cover, data, "http")
+		if !ok {
+			// epic fail: terminate session
+			return
+		}
+		// send pending response to client
+		if n > 0 {
+			if verbose {
+				log.Printf ("[http] %d bytes received from cover server.\n", n)
+				log.Println ("[http] Incoming response:\n" + string(data) + "\n")
+			}
+			// transform response
+			resp := hdlr.xformResp (data, n) 
+			// sent incoming response data to client
+			if !sentData (client, resp, "http") {
+				// terminate session on failure
+				return
+			}
+		}
+
+		//-------------------------------------------------------------
+		//	Downstream message passing
+		//-------------------------------------------------------------
+				
+		// get data from client.
+		n,ok = rcvData (client, data, "http")
+		if !ok {
+			// epic fail: terminate session
+			return
+		}
+		// send pending client request
+		if n > 0 {
+			// optional logging
+			if verbose {
+				log.Printf ("[cover] %d bytes received from client.\n", n)
+				log.Println ("[cover] Incoming request:\n" + string(data) + "\n")
+			}
+			// transform request
+			req := hdlr.xformReq (data, n)
+			// sent request to cover server
+			sentData (cover, req, "http")
+		}
 	}
 }
 
