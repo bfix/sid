@@ -27,17 +27,20 @@ package main
 
 import (
 	"net"
-	"log"
 	"strings"
+	"gospel/logger"
 )
 
 ///////////////////////////////////////////////////////////////////////
 // Public types
 
 /*
- * HTTP service instance
+ * HTTP service instance: In the current version there is only one
+ * Cover server instance available that is shared among all HTTP
+ * go-routines.
  */
 type HttpSrv struct  {
+	hndlr		*Cover		// cover server reference
 }
 
 ///////////////////////////////////////////////////////////////////////
@@ -45,7 +48,10 @@ type HttpSrv struct  {
  * Create and initialize new HTTP service instance
  */
 func NewHttpSrv() *HttpSrv {
-	return &HttpSrv{}
+	return &HttpSrv {
+		//	Instantiate Cover (content transformer)
+		hndlr:	NewCover(),
+	}
 }
 
 ///////////////////////////////////////////////////////////////////////
@@ -63,17 +69,16 @@ func (s *HttpSrv) Process (client net.Conn) {
 	// allocate buffer
 	data := make ([]byte, 32768)
 	
-	//	Instantiate Cover (content transformer)
-	hdlr := NewCover()
-	
 	// open a new connection to the cover server
-	cover := hdlr.connect ()
+	cover := s.hndlr.connect ()
 	if cover == nil {
 		// failed to open connection to cover server
 		return
 	}
 	// close connection to cover server on exit
-	defer cover.Close()
+	defer s.hndlr.disconnect (cover)
+	// get associated state info
+	state := s.hndlr.GetState (cover)
 
 	// don't block read/write operations on socket buffers
 	client.SetTimeout (1)
@@ -93,12 +98,8 @@ func (s *HttpSrv) Process (client net.Conn) {
 		}
 		// send pending response to client
 		if n > 0 {
-			if verbose {
-				log.Printf ("[http] %d bytes received from cover server.\n", n)
-				log.Println ("[http] Incoming response:\n" + string(data) + "\n")
-			}
 			// transform response
-			resp := hdlr.xformResp (data, n) 
+			resp := s.hndlr.xformResp (state, data, n) 
 			// sent incoming response data to client
 			if !sentData (client, resp, "http") {
 				// terminate session on failure
@@ -118,13 +119,8 @@ func (s *HttpSrv) Process (client net.Conn) {
 		}
 		// send pending client request
 		if n > 0 {
-			// optional logging
-			if verbose {
-				log.Printf ("[cover] %d bytes received from client.\n", n)
-				log.Println ("[cover] Incoming request:\n" + string(data) + "\n")
-			}
 			// transform request
-			req := hdlr.xformReq (data, n)
+			req := s.hndlr.xformReq (state, data, n)
 			// sent request to cover server
 			sentData (cover, req, "http")
 		}
@@ -138,7 +134,11 @@ func (s *HttpSrv) Process (client net.Conn) {
  * @return bool - protcol handled?
  */
 func (s *HttpSrv) CanHandle (protocol string) bool {
-	return strings.HasPrefix (protocol, "tcp")
+	rc := strings.HasPrefix (protocol, "tcp")
+	if !rc {
+		logger.Println (logger.INFO, "[http] Unsupported protocol '" + protocol + "'") 
+	}
+	return rc 
 }
 
 //---------------------------------------------------------------------
@@ -149,7 +149,11 @@ func (s *HttpSrv) CanHandle (protocol string) bool {
  * @return bool - local address?
  */
 func (s *HttpSrv) IsAllowed (addr string) bool {
-	return strings.HasPrefix (addr, "127.0.0.1")
+	rc := strings.HasPrefix (addr, "127.0.0.1")
+	if !rc {
+		logger.Println (logger.WARN, "[http] Invalid remote address '" + addr + "'") 
+	}
+	return rc
 }
 
 //---------------------------------------------------------------------

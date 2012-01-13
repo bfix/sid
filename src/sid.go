@@ -29,16 +29,9 @@ package main
 // Import external declarations.
 
 import (
-	"log"
 	"strconv"
 	"gospel/network"
-)
-
-///////////////////////////////////////////////////////////////////////
-// Package constants.
-
-const (
-	verbose = true			// verbose logging output
+	"gospel/logger"
 )
 
 ///////////////////////////////////////////////////////////////////////
@@ -46,10 +39,10 @@ const (
 
 func main() {
 
-	log.Println ("[sid] ==============================")
-	log.Println ("[sid] SID v.01 -- Server In Disguise")
-	log.Println ("[sid] (c) 2012 Bernd R. Fix      >Y<")
-	log.Println ("[sid] ==============================")
+	logger.Println (logger.INFO, "[sid] ==============================")
+	logger.Println (logger.INFO, "[sid] SID v.01 -- Server In Disguise")
+	logger.Println (logger.INFO, "[sid] (c) 2012 Bernd R. Fix      >Y<")
+	logger.Println (logger.INFO, "[sid] ==============================")
 	
 	//-----------------------------------------------------------------
 	// Handle SID configuration: read configuration data from config
@@ -81,5 +74,5 @@ func main() {
 	
 	// wait for termination
 	<-ch
-	log.Println ("[sid] Application terminated.")
+	logger.Println (logger.INFO, "[sid] Application terminated.")
 }

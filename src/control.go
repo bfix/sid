@@ -27,9 +27,9 @@ package main
 import (
 	"os"
 	"net"
-	"log"
 	"bufio"
 	"strings"
+	"gospel/logger"
 )
 
 ///////////////////////////////////////////////////////////////////////
@@ -52,14 +52,10 @@ func (c *ControlSrv) Process (client net.Conn) {
 	for repeat := true; repeat; {
 	
 		// prepare state information for output
-		logState := "OFF"
-		if CfgData.LogState {
-			logState = "ON"
-		}
 
 		// show control menu			
 		b.WriteString ("\n-----------------------------------\n")
-		b.WriteString ("toggle (L)ogging [" + logState + "]\n")
+		b.WriteString ("set (L)og level [" + logger.GetLogLevel() + "]\n")
 		b.WriteString ("(T)erminate application\n")
 		b.WriteString ("e(X)it\n")
 		b.WriteString ("-----------------------------------\n")
@@ -73,7 +69,7 @@ func (c *ControlSrv) Process (client net.Conn) {
 		}
 
 		// handle command
-		log.Print ("[ctrl] command '" + cmd + "'\n")
+		logger.Println (logger.INFO, "[ctrl] command '" + cmd + "'")
 		switch cmd {
 			//-------------------------------------------------
 			// Terminate application
@@ -82,12 +78,12 @@ func (c *ControlSrv) Process (client net.Conn) {
 						b.Flush()
 						cmd,_ = readCmd (b)
 						if cmd == "YES" {
-							log.Println ("[ctrl] Terminating application")
+							logger.Println (logger.WARN, "[ctrl] Terminating application")
 							b.WriteString ("Terminating application...")
 							b.Flush()
 							c.Ch <- true
 						} else {
-							log.Println ("[ctrl] Response '" + cmd + "' -- Termination aborted!")
+							logger.Println (logger.WARN, "[ctrl] Response '" + cmd + "' -- Termination aborted!")
 							b.WriteString ("Wrong response -- Termination aborted!")
 							b.Flush()
 						}

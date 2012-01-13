@@ -24,7 +24,7 @@ package main
 
 import (
 	"net"
-	"log"
+	"gospel/logger"
 )
 
 ///////////////////////////////////////////////////////////////////////
@@ -61,13 +61,13 @@ func sentData (conn net.Conn, data []byte, srv string) bool {
 					if nerr.Timeout() || nerr.Temporary() {
 						retry++
 						if retry == 3 {
-							log.Printf ("[%s] Write failed after retries: %s\n", srv, err.String())
+							logger.Printf (logger.ERROR, "[%s] Write failed after retries: %s\n", srv, err.String())
 							return false
 						}
 					}
 				default:
 					// we are in real trouble...
-					log.Printf ("[%s] Write failed finally: %s\n", srv, err.String())
+					logger.Printf (logger.ERROR, "[%s] Write failed finally: %s\n", srv, err.String())
 					return false
 			}
 		}
@@ -104,7 +104,7 @@ func rcvData (conn net.Conn, data []byte, srv string) (int, bool) {
 					}
 				default:
 					// we are in real trouble...
-					log.Printf ("[%s] Read failed finally: %s\n", srv, err.String())
+					logger.Printf (logger.ERROR, "[%s] Read failed finally: %s\n", srv, err.String())
 					return 0,false
 			}
 		}
@@ -112,6 +112,6 @@ func rcvData (conn net.Conn, data []byte, srv string) (int, bool) {
 		return n,true
 	}
 	// retries failed
-	log.Printf ("[%s] Read failed after retries...\n", srv)
+	logger.Printf (logger.ERROR, "[%s] Read failed after retries...\n", srv)
 	return 0, false
 }
