@@ -33,17 +33,58 @@ import (
 // Public types
 
 /*
- * State information for cover server connection.
+ * Tag represents all HTML tags from a cover server response (content)
+ * that refer to an external ressource and therefore must be conserved
+ * and translated to match the profile of a "normal" usage of the cover
+ * site. (Resources are replaces by "innocent" and "unharnfuk" content
+ * on the fly during the response handling for ressources other than HTML)
  */
-type state struct {
+type Tag struct {
+	name	string
+	attrs	map[string]string
+}
+
+//---------------------------------------------------------------------
+/*
+ * Instantiate a new Tag object with given parameters.
+ * @param n string - name of tag
+ * @param a map[string]string - list of attributes
+ * @return *Tag - pointer to new instance
+ */
+func NewTag (n string, a map[string]string) *Tag {
+	return &Tag {
+		name:	n,
+		attrs:	a,
+	}
+}
+
+//---------------------------------------------------------------------
+/*
+ * Stringify tag
+ * @return string - string representation of tag
+ */
+func (t *Tag) String() string {
+	res := "<" + t.name
+	for key,val := range t.attrs {
+		res += " " + key + "=" + val
+	}
+	return res + "/>"
+}
+
+//=====================================================================
+/*
+ * State information for cover server connections.
+ */
+type State struct {
 	reqBalance		int			// size balance for request translation
 	reqRessource	string		// ressource requested
 	respBalance		int			// size balance for response translation
-	respHdr			bool		// response header parsed?
 	respCont		bool		// response continuation?
 	respSize		int			// expected response size (total length)
 	respType		string		// format identifier for response content (mime type)
 	respBinary		bool		// pending response is binary data?
+	respTags		[]*Tag		// list of tags to be included in response
+	respHtmlDone	bool		// HTML closed?
 }
 
 //---------------------------------------------------------------------
@@ -52,8 +93,10 @@ type state struct {
  */
 type Cover struct {
 	server		string					// "host:port" of cover server
-	states		map[net.Conn]*state		// state of active connections
+	states		map[net.Conn]*State		// state of active connections
 	htmls		map[string]string		// HTML page replacements
+	htmlIn		string					// HTML intro
+	htmlOut		string					// HTML outtro
 }
 
 ///////////////////////////////////////////////////////////////////////
@@ -87,15 +130,16 @@ func (c *Cover) connect () net.Conn {
 	
 	// allocate state information and add to state list
 	// initialize struct with default data
-	c.states[conn] = &state {
+	c.states[conn] = &State {
 		reqBalance:		0,
 		reqRessource:	"",
 		respBalance:	0,
-		respHdr:		false,
 		respCont:		false,
 		respSize:		0,
 		respType:		"text/html",
 		respBinary:		false,
+		respTags:		make ([]*Tag, 0),
+		respHtmlDone:	false,
 	} 
 	return conn
 }
@@ -118,7 +162,7 @@ func (c *Cover) disconnect (conn net.Conn) {
  * @param conn net.Conn - client connection
  * @return *state - reference to state instance
  */
-func (c *Cover) GetState (conn net.Conn) *state {
+func (c *Cover) GetState (conn net.Conn) *State {
 	if s,ok := c.states[conn]; ok {
 		return s
 	}
@@ -134,7 +178,7 @@ func (c *Cover) GetState (conn net.Conn) *state {
  * @param num int - length of request in bytes
  * @return []byte - transformed request (sent to cover server)
  */
-func (c *Cover) xformReq (s *state, data []byte, num int) []byte {
+func (c *Cover) xformReq (s *State, data []byte, num int) []byte {
 
 	inStr := string(data[0:num])
 	logger.Printf (logger.DBG_HIGH, "[http] %d bytes received from cover server.\n", num)
@@ -145,8 +189,7 @@ func (c *Cover) xformReq (s *state, data []byte, num int) []byte {
 	req := ""
 	complete := false
 	for {
-		// get next line (terminated by line break); if the
-		// line is continued on the next block
+		// get next line (terminated by line break)
 		b,broken,_ := rdr.ReadLine()
 		if b == nil || len(b) == 0 {
 			complete = !broken
@@ -171,7 +214,12 @@ func (c *Cover) xformReq (s *state, data []byte, num int) []byte {
 				
 				// check for back-translation
 				uri := parts[1]
-				if strings.HasPrefix (uri, "/&&") {
+				if strings.HasPrefix (uri, "/&") {
+					// split into scheme and remaining URI
+					pos := strings.Index (string(uri[2:]), "/")
+					scheme := string(uri[2:pos])
+					res := string(uri[pos:])
+					uri = scheme + "://" + res 
 				}
 				// assemble new ressource request
 				s.reqRessource = uri
@@ -233,7 +281,7 @@ func (c *Cover) xformReq (s *state, data []byte, num int) []byte {
  * @param num int - length of response data
  * @return []data - transformed response (sent to client)
  */
-func (c *Cover) xformResp (s *state, data []byte, num int) []byte {
+func (c *Cover) xformResp (s *State, data []byte, num int) []byte {
 
 	inStr := string(data[0:num])
 	logger.Printf (logger.DBG_HIGH, "[cover] %d bytes received from cover server.\n", num)
@@ -241,7 +289,7 @@ func (c *Cover) xformResp (s *state, data []byte, num int) []byte {
 
 	rdr := bufio.NewReader (strings.NewReader (inStr))
 	resp := ""
-	if !s.respHdr {
+	if !s.respCont {
 		// start of new response encountered: parse header fields
 		for {
 			// get next line (terminated by line break); if the
@@ -253,7 +301,6 @@ func (c *Cover) xformResp (s *state, data []byte, num int) []byte {
 					return data
 				}
 				// we have parsed the header; continue with body
-				s.respHdr = true
 				break
 			}
 			line := string(b)
@@ -287,11 +334,106 @@ func (c *Cover) xformResp (s *state, data []byte, num int) []byte {
 	// we have parsed the response header; now process the response body
 	if strings.HasPrefix (s.respType, "text/") {
 		// do content translation/assembly
-		ressources := parseHTML (rdr)
-		return assembleHTML (s, ressources, num)
-	} 
+		parseHTML (rdr, s.respTags)
+		resp += c.assembleHTML (s, num)
+		// we are now in continuation mode.
+		s.respCont = true
+		// return response data
+		return []byte(resp)
+	}
 	
 	//return untranslated response
 	logger.Println (logger.ERROR, "[cover] Unhandled response!")
 	return data		
+}
+
+//=====================================================================
+/*
+ * Assemble a response from the current state (like response header),
+ * the resource list and a replacement body (addressed by the requested
+ * ressource path from state).
+ * @param s *state - current state info
+ * @param size int - target size of response
+ * @return []byte - assembled response
+ */
+func (c *Cover) assembleHTML (s *State, size int) string {
+	resp := ""
+	if !s.respCont {
+		// start of a new HTML response. Use pre-defined HTM page
+		// for content and add as many pending tags as possible.
+		page,ok := c.htmls[s.reqRessource]
+		if !ok {
+			page = "<h1>Unsupported page. Please return to previous page!</h1>"
+		}
+		// compute remaining size
+		size -= len(c.htmlIn) + len(page)
+		// we have a pre-defined page.
+		resp = c.htmlIn + page
+	}
+	
+	// add ressources (if any are pending)
+	if len(s.respTags) > 0 {
+		next := 0
+		for pos,tag := range s.respTags {
+			inl := c.translateTag (tag)
+			if len(inl) < size {
+				resp += inl
+				size -= len(inl)
+				next = pos+1
+			} else {
+				break
+			}
+		}
+		// removed written tags
+		s.respTags = s.respTags[next:]
+	}
+				
+	if !s.respHtmlDone {
+		// close HTML if space allows
+		if len(c.htmlOut) < size {
+			resp += c.htmlOut
+			size -= len(c.htmlOut)
+			resp += padding (size)
+			s.respHtmlDone = true
+		} else {
+			resp += padding (size)
+			s.respHtmlDone = false
+		}
+	} else {
+		// we are done, but have still response data to transfer. Fill up
+		// with padding sequence. 
+		resp += padding (size)
+	}
+	return resp
+}
+
+//---------------------------------------------------------------------
+/*
+ * Translate tag source attribute: if the source specification is an
+ * URI of the form "<scheme>://<server>/<path>/<to>/<resource...>" it
+ * is transformed to an absolute path on on the sending server (that is
+ * the SID instance) that can later be translated back to its original
+ * form; it looks like "/&<scheme>/<server>/<path>/<to>/<resource...>"
+ * @param tag *Tag - tag to be translated
+ * @return string - translated tag
+ */
+func (c *Cover) translateTag (tag *Tag) string {
+
+	// translate "src" attribute of tag
+	if src,ok := tag.attrs["src"]; ok {
+		if pos := strings.Index (src, "://"); pos != -1 {
+			// we have an absolute URI that needs translation
+			logger.Printf (logger.INFO, "[cover] URI translation of '%s'\n", src)
+			scheme := string(src[0:pos])
+			res := string(src[pos+2:])
+			tag.attrs["src"] = "/&" + scheme + res
+		}
+	} else {
+		// failed to access "src" attribute?!
+		s := tag.String()
+		logger.Println (logger.ERROR, "[cover] Tag translation failed: " + s)
+		return s
+	}
+	// return tag representation
+	return tag.String()
 }
