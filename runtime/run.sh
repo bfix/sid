@@ -7,8 +7,8 @@ EXEC=""
 [ -x ../bin/src ] && EXEC=../bin/src
 [ -x ../src/sid ] && EXEC=../src/sid
 
-echo "Running '${EXEC}'..."
+echo "Running '${EXEC} $*' ..."
 
-${EXEC}
+${EXEC} $*
 
 exit 0
