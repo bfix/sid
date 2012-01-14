@@ -38,8 +38,10 @@ func NewCvrPicpost() *Cover {
 	// allocate cover server instance
 	cover := &Cover {
 		server:		"www.picpost.com:80",
-		states:		make (map[net.Conn]*state),
+		states:		make (map[net.Conn]*State),
 		htmls:		make (map[string]string),
+		htmlIn:		"<html><body>",
+		htmlOut:	"</body></html>",
 	}
 	
 	// initialize instance
