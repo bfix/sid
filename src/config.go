@@ -68,8 +68,12 @@ var CfgData Config = Config {
 func InitConfig () {
 	// process command line arguments	
 	CfgData.CfgFile = *flag.String ("c", CfgData.CfgFile, "configuration file")
-	CfgData.LogFile = *flag.String ("L", CfgData.LogFile, "log file")
-	CfgData.LogState = *flag.Bool ("l", CfgData.LogState, "turn on file-based logging")
+	flag.String ("L", CfgData.LogFile, "logfile name")
+	flag.Bool ("l", CfgData.LogState, "file-based logging")
+	flag.Int  ("p", CfgData.CtrlPort, "control session port")
+	flag.Int  ("h", CfgData.HttpPort, "HTTP session port")
+	flag.Int  ("s", CfgData.HttpsPort, "HTTPS session port")
+	flag.Parse()
 	
 	// read configuration from file
 	logger.Println (logger.INFO, "[config] using configuration file '" + CfgData.CfgFile + "'")
@@ -85,20 +89,30 @@ func InitConfig () {
 		logger.Printf (logger.ERROR, "[config] error reading configuration file: %v\n", err)
 		os.Exit (1)
 	}
-	logger.Println (logger.INFO, "[config] configuration complete.")
+	logger.Println (logger.INFO, "[config] configuration file complete.")
 
+	// handle command line flags that may override options specified in the
+	// configuration file (or are default values)
+	flag.Visit (func (f *flag.Flag) {
+		val := f.Value.String()
+		logger.Printf (logger.INFO, "[config] Overriding '%s' with '%s'\n", f.Usage, val)
+		switch f.Name {
+			case "L":	CfgData.LogFile = val
+			case "l":	CfgData.LogState = (val == "true")
+			case "p":	CfgData.CtrlPort,_ = strconv.Atoi (val)
+			case "h":	CfgData.HttpPort,_ = strconv.Atoi (val)
+			case "s":	CfgData.HttpsPort,_ = strconv.Atoi (val)
+		}
+	})
+	
 	// turn on logging if specified on command line or config file
 	if CfgData.LogState {
+		logger.Println (logger.INFO, "[config] File logging requested.")
 		if !logger.LogToFile (CfgData.LogFile) {
 			CfgData.LogState = false
 		}
 	}
 
-	// Handle additional command line arguments (options)
-	CfgData.CtrlPort = *flag.Int  ("p", CfgData.CtrlPort, "control session port")
-	CfgData.HttpPort = *flag.Int  ("h", CfgData.HttpPort, "HTTP session port")
-	CfgData.HttpsPort = *flag.Int  ("s", CfgData.HttpsPort, "HTTPS session port")
-	
 	// list current configuration data
 	logger.Println (logger.INFO, "[config] !==========< configuration >===============")
 	logger.Println (logger.INFO, "[config] !Configuration file: " + CfgData.CfgFile)
