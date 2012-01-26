@@ -17,77 +17,309 @@ General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-Prerequisites:
-==============
+Scenario
+--------
 
-GOLANG
-------
+A number of people "C_n" want to sent (one) document to a receiver "R" via a
+web browser (once). An eavesdropper "E" wants to know which "C_n" communicates
+with "R" and what information was exchanged.      
 
-This application is written in the GO programming language developed
-by Rob Pike and Ken Thompsen at Google, Inc. The software is distributed
-as source code and can be build on different operating systems and hardware
-architectures. Visit <http://golang.org> to learn more about GO.
+Objective
+---------
 
-To install GO on your computer you must have the usual C Compiler tools
-installed; on Debian this requires the packages *awk*, *bison*, *gcc* and
-*make* (see <http://golang.org/doc/install.html#ctools> for more info) and a
-working "Mercurial" (source control management software) on your box (for more
-info see <http://golang.org/doc/install.html#mercurial>).
+Hide the fact that "C_n" communicates with "R" from "E" and protect the
+information exchanged.
 
-Use a directory of your choice (I recommend to use the `/opt` directory
-if you are allowed to create sub-directories under `/opt`) and then to
-change into this directory. Next you fetch a snapshot of the GO
-repository and compile and test it:
+Assumptions
+-----------
+    
+1. "E" may know that a "C_n" wants to communicate with "R"
 
-	$ cd /opt
-	$ hg clone https://go.googlecode.com/hg/ go
-	$ cd go
-	$ hg update release
-	$ cd src
-	$ ./all.bash
+2. "E" knows all information given by "R" to "C_n" on how to communicate;
+   this includes the IP address of the server to which the document should
+   be uploaded by "C_n". Technically speaking this server is a TOR enclaved
+   server (running on the same machine as a TOR exit node).  
+        
+3. "E" has no (physical/logical) access to the computers of "C_n" or "R"
 
-If you see a 'ALL TESTS PASSED' message, your build was successful. You can
-now add environment variables for GO; it is recommended to add these lines
-to a start-up file (like `.bashrc`) after you changed it to match your soft-
-and hardware environment:
+4. "E" has the capabilities to monitor all possible net traffic involved.          
+5. "C_n" is technically able to use the TOR network (via a browser bundle).
 
-	export GOOS=linux
-	export GOARCH=386
-	export GOROOT=/opt/go
-	export PATH=${PATH}:${GOROOT}/bin
+Approach
+--------
 
-GOSPEL
-------
+1. "R" operates a computer that runs a "TOR exit node" and a "SID" as an
+   enclaved server to receive the documents (via HTTP/POST requests)
+        
+2. If "C_n" want to sent a document, the following steps have to be
+   performed:
+    
+    * "C_n" uses the TOR-enabled browser to connect to "SID" via specifying
+      the IP address (dotted pairs) of the server.
+              
+    * For all communication between "C_n" and the "SID", a cover communication
+      is generated (by "SID") between "SID" and a "Cover Server". The "Cover
+      Server" is not a server operated by "R" but is a public server on the
+      Internet. Traffic between the "SID" and the "Cover Server" look exactly
+      like traffic between the "TOR exit node" and the "Cover Server" to "E".
 
-GOSPEL is the "GO SPEcial Library" and an Open-Source project. To install
-the required GOSPEL packages for SID on your computer, you need a working
-*git* installation; then simply issue the following commands:
+Components
+----------
 
-	$ mkdir /opt/go-libs
-	$ cd /opt/go-libs
-	$ git clone git://github.com/bfix/gospel gospel
-	$ cd gospel/src
-	$ make install
+    +-----+             +----------------+
+    | C_n |<----------->| TOR entry node |
+    +-----+             +----------------+
+                               |
+                        +----------------+
+                        |    TOR relay   |
+                        +----------------+
+                               |
+                        +================+
+                        | TOR exit node  |
+                        +----------------+        +---------------------+
+                        |      SID       |<------>| (Fake) Cover Server |
+                        +================+        +---------------------+
+                            
+                            
+Generating cover traffic
+------------------------
 
-N.B.: Because of dependencies you must run `make install` first before you
-can run `make` later (if required after code changes in the library).
+For the "cover traffic" approach to work, the following additional assumptions
+have to be made:
 
-Building SID
-============
+1. The "Cover Server" is likely to be accessed via TOR (maybe related to
+   so-called "adult content", but not prone to legal/criminal investigations).
+   "C_n" has to live with the fact that "E" may believe he is looking at or
+   even providing such content. Ideally, we would pick a type of cover traffic
+   that is only very mild embarrassing... just embarrassing enough that "C_n"
+   can make it plausible he/she had a good reason to use TOR to access the
+   site. For example, discussion forums about medical or psychological issues
+   would be ideal.
 
-To build the SID executable, change into the source directory and make the
-target:
+2. The communication profiles "C_n/SID" and "SID/Cover Server" need to match
+   as closely as possible to provide good cover and ease the software
+   complexity of the "SID". This can be achieved if the "Cover Server"
+   provides a kind of upload functionality - just like the "SID" (a picture
+   post for adult content may be a good cover server).   
 
-	$ cd src
-	$ make
+To provide the best cover possible, the flow of data between "C_n" and "SID"
+and between "SID" and "Cover Server" should match in packet timings and sizes
+as much as possible. The granularity of this approach is on the TCP packet
+level (chunk of TCP stream data sent or received in one go). So every packet
+received by the "SID" from "C_n" should generate a packet of the same size sent
+to the "Cover Server"; every packet received from the "Cover Server" should
+result in a packet of the same size sent from the "SID" to "C_n". If "E" is
+monitoring the traffic it will assume that "C_n" is actually talking to the
+"Cover Server".
 
-The executable is named 'sid' and resides in the source directory. Copy it
-to the directory of your choice.
+While in principle, it might be possible to create a cover conversation
+that matches the conversation between "C_n" and the "SID", this is quite
+difficult in practice. For example, if the "Cover Server" is a web page, it
+probably has CSS style files, pictures, and so on. Therefore, it is easier for
+the "SID" to change the real conversation to mimic the cover conversation,
+rather than the other way around.
+
+### Assumptions:
+
+* "SID" is running on the same node as the TOR exit node (enclave)
+
+* All TOR traffic to the "SID" is routed through the TOR exit node on the
+  same machine. (This is only true if the "SID" is always accessed via an
+  IP address instead of a domain name-based URL; see section "Vulnerabilities"
+  for more details)  
+  
+* Communication between the user and the "SID" through the TOR network
+  is based on HTTP
+  
+Network traffic between the TOR network and the TOR exit node, between the TOR
+exit node and the "SID" and between the "SID" and the "Cover Server" is all
+going through the local IP stack (the stack handles lost, out of sequence and
+fragmented incoming IP packets and possibly assembles them into a TCP stream
+and it breaks up an outgoing TCP stream into packets).
+
+This IP stack involvement is also the case if there is no "SID" and the TOR
+exit node talks to the Cover server directly (that is the exact situation we
+want to mimic with our solution!). So every traffic passes at least two times
+through the local IP stack.
+
+Therefore working on an IP packet level to reproduce the exact timing of
+exchanged packets is not only tedious, but most likely unnecessary because the
+intermediate IP stack messes things up anyway. As long as an eavesdropper
+can't tell if a timing correlation gap (of IP packets on a "Cover Server"
+connection and TOR cells to/from the exit node) caused by the IP stack from
+one caused by an intermediate "SID", nothing is gained by working on the IP
+packet level.
+
+To reproduce timings of packet flows as close as possible, incoming queues
+on the "SID" (from the TOR exit node as well as from the "Cover Server")
+should be polled at a high frequency. This may result in multiple TCP packets
+of a single request or response, but handling of such fragmented information
+is simple and straight forward.  
+
+### Handling of incoming requests
+
+The "SID" receives HTTP requests from the user's browser and translates
+these requests into requests for the "Cover Server". Based on the handling of
+outgoing responses this translation involves:
+
+1. The initial generic request ("GET /") is simply passed on to the "Cover
+   Server" unmodified.
+	
+2. Re-translation of header information (like cookies)
+	
+3. POST requests are inspected to identify survey uploads. If a survey
+   upload is detected, a special handling is triggered.
+	
+4. URLs of all other requests are re-translated back to their original form
+   (this means the user's browser will never see absolute URLs, only URLs
+   local to the "SID" and so will never request resources bypassing the "SID"
+   and therefore revealing himself as a document submitter)
+
+Translated/modified requests are then forwarded to the "Cover Server".
+
+#### Handling of document uploads
+
+The original content of the POST request is stored (that is the document
+submitted by "C_n") and is replaced by a content suitable for upload to the
+"Cover Server". The uploaded content must have the same size as the
+submitted document and should be eligible content for the "Cover Server".
+
+### Handling of outgoing responses
+
+Responses from the "Cover Server" are translated before they are passed on to
+the user's browser. The type of translation is based based on the MIME type of
+the requested resource:
+
+#### Translation of HTML pages
+
+The translation of HTML content involves three steps:
+
+##### Resource URL translation
+
+Every resource URL inside an HTML page from the "Cover Server" is inspected.
+If it is a relative URL, it is not changed; if the URL is absolute, it is
+translated into a relative URL that will be handled by the "SID" if the
+user's browser requests the resource addressed by the URL later on.
+
+The URL translation process will not change the length of the URL, so it is
+easy to perform translation even across TCP packet boundaries (if streams are
+polled with high frequencies a large response may break up into multiple TCP
+packets retrieved from the stream). An absolute URL of the form
+"<scheme>://<server>/<path>" is translated into a relative URL of the same size
+like "/&<scheme>/<server>/<path>". Any local URL starting with "/&" can be
+translated back into its external form easily by "SID".
+
+##### Link translations
+
+For every link URL inside the HTML body the Hidden Server decides if the link
+is needed or not. Unneeded links are blanked out.
+
+The URL of needed links (like the link on the path towards an upload form) is
+translated like a resource URL (see previous section) and the associated link
+text is adjusted accordingly. 
+
+##### Cookie translations
+
+Cookies are replaced by values of the same length generated by the "SID" that
+also keeps a mapping between cookie values. The values can later be
+re-translated by the "SID" during request handling. 
+
+##### Body translation
+
+HTML body text is replaced by the text from the Hidden Server. Since this text
+is kept as compact as possible, most of the original text will just blanked
+out (replaced by white spaces or comments of the appropriate length).
+
+Any direct scripting commands are also blanked out to avoid "hidden" URLs
+embedded in the HTML page that can be used to reveal the identity of "C_n".
+
+##### Other resources (Images, videos, flash, scripts, etc)
+
+All other resources are simply replaced by format-compliant dummies of the same
+size. 
+
+Cover traffic overview
+----------------------
+
+                               +=============[  Machine  ]==================+
+                               |                                            |
+                               | +--------+                 +-------------+ |                 +----------+
+    downstream     ----------> | |        | --------------> |             | | --------------> |          |
+                               | |  TOR   |  HTTP request   |             | |  HTTP request   |  Cover   |
+    TOR NETWORK     TOR cells  | |  exit  |                 |     SID     | |                 |  Server  |
+                               | |  node  |  HTTP response  |  (enclave)  | |  HTTP response  |          |
+      upstream     <---------- | |        | <-------------- |             | | <-------------- |          |
+                               | +--------+                 +-------------+ |                 +----------+
+                               |                                            |
+                               +============================================+
 
 
-Configuring SID
-===============
+Cover traffic timing diagram
+----------------------------
 
-Copy the example configuration file 'runtime/sid.cfg' to the runtime directory
-you want to use for SID. Edit the configuration file to match your local
-requirements.
+     TOR network		TOR exit node         Hidden Server         Cover Server
+    =============      ===============       ===============       ==============
+          |                    |                     |                    |
+          |------------------->|                     |                    |
+          |   cell(s) with     |                     |                    |
+          |   HTTP request     |                     |                    |
+          |                    |                     |                    |
+          |            [ (1) Assemble ]              |                    |
+          |            [ HTTP request ]              |                    |
+          |            [ (involves IP ]              |                    |
+          |            [ stack logic) ]              |                    |
+          |                    |                     |                    |
+          |                    |-------------------->|                    |
+          |                    |   HTTP request      |                    |
+          |                    |                     |                    |
+          |                    |              [ (2) Request ]             |
+          |                    |              [ translation ]             |
+          |                    |                     |                    |
+          |                    |                     |------------------->|
+          |                    |                     |  HTTP request      |
+          |                    |                     |                    |
+          |                    |                     |<-------------------|
+          |                    |                     |  HTTP response     |
+          |                    |                     |                    |
+          |                    |              [ (3) Response ]            |
+          |                    |              [  translation ]            |
+          |                    |                     |                    |
+          |                    |<--------------------|                    |
+          |                    |   HTTP response     |                    |
+          |                    |                     |                    |
+          |           [ (4) Package   ]              |                    |
+          |           [ HTTP response ]              |                    |
+          |           [ into cells    ]              |                    |
+          |                    |                     |                    |
+          |<-------------------|                     |                    |
+          |   cell(s) with     |                     |                    |
+          |   HTTP response    |                     |                    |
+          |                    |                     |                    |
+
+
+Vulnerabilities
+---------------
+
+The approach will fail to fulfill the objective if:
+
+* "E" gets access to the involved computers, especially the "TOR exit node"
+  operated by "R". So it is important not to give "E" any reason to seize
+  the computer for "forensic analysis".
+  
+* "E" knows which "Cover Server" is used by the "SID"; he can than try to
+  correlate the communication between "C_n" and the "Cover Server" as
+  an indication of "C_n" communicating with "R" - especially if "C_n"
+  communicates with the "Cover Server" only once (through the "SID").
+  This problem can be eased by using as much different "Cover Servers" as
+  possible. So the "usage profile" of the "Cover Server" by "C_n" must
+  match the "normal usage" of the "Cover Server" by other users as much as
+  possible to give a good cover; otherwise the unusual usage pattern can
+  reveal that "C_n" is not using the "Cover Server", but the "SID".
+  
+* Talking to an enclaved server involves a special circuit building step that
+  is only used for enclaved servers: The existing three hop cuircuit (entry
+  node, middle node and exit node) is extended towards the TOR entry node that
+  also hosts the enclaved server. If an eavesdropper controls the exit node
+  before the circuit extension, he "knows" that "C_n" is talking to the
+  enclaved server - even if the traffic patterns might suggest "C_n" is
+  talking to the "Cover Server".  
