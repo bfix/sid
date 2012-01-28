@@ -133,3 +133,20 @@ func padding (size int) string {
 	}
 	return s + " -->"
 }
+
+//---------------------------------------------------------------------
+/*
+ * Generate an error page.
+ * @param severe bool - unrecoverable error?
+ * @return string - error page
+ */
+func errorPage (severe bool) string {
+	if severe {
+		return  "<html><body>\n<h1>Severe error occurred</h1>\n" +
+				"Please return to previous page and try again later!\n" +
+				"</body></html>"
+	}
+	return  "<html><body>\n<h1>Error occurred</h1>\n" +
+			"Please return to previous page and try again.\n" +
+			"</body></html>"
+}
