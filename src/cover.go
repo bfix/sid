@@ -36,8 +36,8 @@ import (
  * Tag represents all HTML tags from a cover server response (content)
  * that refer to an external ressource and therefore must be conserved
  * and translated to match the profile of a "normal" usage of the cover
- * site. (Resources are replaces by "innocent" and "unharnfuk" content
- * on the fly during the response handling for ressources other than HTML)
+ * site. (Resources are replaces by "innocent" and "unharnful" content
+ * on the fly during the response handling for non-HTML ressources)
  */
 type Tag struct {
 	name	string
@@ -87,16 +87,15 @@ type State struct {
 	respHtmlDone	bool		// HTML closed?
 }
 
-//---------------------------------------------------------------------
+//=====================================================================
 /*
  * Cover server instance (stateful)
  */
 type Cover struct {
-	server		string					// "host:port" of cover server
-	states		map[net.Conn]*State		// state of active connections
-	htmls		map[string]string		// HTML page replacements
-	htmlIn		string					// HTML intro
-	htmlOut		string					// HTML outtro
+	server		string						// "host:port" of cover server
+	states		map[net.Conn]*State			// state of active connections
+	htmls		map[string]string			// HTML page replacements
+	hdlr		UploadHandler				// handler of cover uploads
 }
 
 ///////////////////////////////////////////////////////////////////////
@@ -108,7 +107,7 @@ type Cover struct {
  */
 func NewCover() *Cover {
 	// currently we only have one cover server implementation
-	return NewCvrPicpost()
+	return NewCvrImgon()
 }
 
 ///////////////////////////////////////////////////////////////////////
@@ -203,7 +202,7 @@ func (c *Cover) xformReq (s *State, data []byte, num int) []byte {
 			// GET command: request resource
 			// If the requested resource identifier is a translated
 			// entry, we need to translate that back into its original
-			// form. Translated entries start with "/&&".
+			// form. Translated entries start with "/&".
 			// It is assumed, that a "GET" line is one of the first
 			// lines in a request and therefore never fragmented.
 			//---------------------------------------------------------
@@ -361,14 +360,11 @@ func (c *Cover) assembleHTML (s *State, size int) string {
 	if !s.respCont {
 		// start of a new HTML response. Use pre-defined HTM page
 		// for content and add as many pending tags as possible.
-		page,ok := c.htmls[s.reqRessource]
-		if !ok {
-			page = "<h1>Unsupported page. Please return to previous page!</h1>"
-		}
+		page := c.getReplacementPage (s.reqRessource)
 		// compute remaining size
-		size -= len(c.htmlIn) + len(page)
+		size -= len(page)
 		// we have a pre-defined page.
-		resp = c.htmlIn + page
+		resp = page
 	}
 	
 	// add ressources (if any are pending)
@@ -390,9 +386,10 @@ func (c *Cover) assembleHTML (s *State, size int) string {
 				
 	if !s.respHtmlDone {
 		// close HTML if space allows
-		if len(c.htmlOut) < size {
-			resp += c.htmlOut
-			size -= len(c.htmlOut)
+		htmlOff := "</body></html>"
+		if len(htmlOff) < size {
+			resp += htmlOff
+			size -= len(htmlOff)
 			resp += padding (size)
 			s.respHtmlDone = true
 		} else {
@@ -405,6 +402,30 @@ func (c *Cover) assembleHTML (s *State, size int) string {
 		resp += padding (size)
 	}
 	return resp
+}
+
+//---------------------------------------------------------------------
+/*
+ * Get HTML replacement page: Return defined replacement page. If no
+ * replacement is defined, return an error page. If the replacement
+ * is tagged "[Upload]", generate a upload form
+ * @param res string - name of the HTML ressource
+ * @return string - page content
+ */
+func (c *Cover) getReplacementPage (res string) string {
+
+	// lookup pre-defined replacement page
+	page,ok := c.htmls[res]
+	// return error page if no replacement is defined.
+	if !ok {
+		return "<h1>Unsupported page. Please return to previous page!</h1>"
+	}
+	// return normal pages
+	if !strings.HasPrefix (page, "[UPLOAD]") {
+		return page
+	}
+	// generate upload form page
+	return c.hdlr.getForm()
 }
 
 //---------------------------------------------------------------------
