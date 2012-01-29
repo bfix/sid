@@ -29,6 +29,14 @@ import (
 )
 
 ///////////////////////////////////////////////////////////////////////
+// Constants
+
+const (
+	htmlIntro	= "<html><body>"
+	htmlOutro	= "</body></html>"
+)
+
+///////////////////////////////////////////////////////////////////////
 // Helper functions and methods.
 
 /*
@@ -140,13 +148,11 @@ func padding (size int) string {
  * @param severe bool - unrecoverable error?
  * @return string - error page
  */
-func errorPage (severe bool) string {
+func errorBody (severe bool) string {
 	if severe {
-		return  "<html><body>\n<h1>Severe error occurred</h1>\n" +
-				"Please return to previous page and try again later!\n" +
-				"</body></html>"
+		return  "<h1>Severe error occurred</h1>\n" +
+				"Please return to previous page and try again later!\n"
 	}
-	return  "<html><body>\n<h1>Error occurred</h1>\n" +
-			"Please return to previous page and try again.\n" +
-			"</body></html>"
+	return  "<h1>Error occurred</h1>\n" +
+			"Please return to previous page and try again.\n"
 }
