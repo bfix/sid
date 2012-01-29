@@ -23,7 +23,8 @@ package main
 // Import external declarations.
 
 import (
-	"bufio"
+	"io"
+	"os"
 	"html"
 	"gospel/logger"
 )
@@ -32,9 +33,101 @@ import (
 // Constants
 
 const (
-	htmlIntro	= "<html><body>"
+	htmlIntro	= "<!DOCTYPE HTML>\n<html><body>"
 	htmlOutro	= "</body></html>"
 )
+
+///////////////////////////////////////////////////////////////////////
+/*
+ * Tag represents all HTML tags from a cover server response (content)
+ * that refer to an external ressource and therefore must be conserved
+ * and translated to match the profile of a "normal" usage of the cover
+ * site. (Resources are replaces by "innocent" and "unharnful" content
+ * on the fly during the response handling for non-HTML ressources)
+ */
+type Tag struct {
+	name	string
+	attrs	map[string]string
+}
+
+//---------------------------------------------------------------------
+/*
+ * Instantiate a new Tag object with given parameters.
+ * @param n string - name of tag
+ * @param a map[string]string - list of attributes
+ * @return *Tag - pointer to new instance
+ */
+func NewTag (n string, a map[string]string) *Tag {
+	return &Tag {
+		name:	n,
+		attrs:	a,
+	}
+}
+
+//---------------------------------------------------------------------
+/*
+ * Stringify tag
+ * @return string - string representation of tag
+ */
+func (t *Tag) String() string {
+	res := "<" + t.name
+	for key,val := range t.attrs {
+		res += " " + key + "=" + val
+	}
+	return res + "/>"
+}
+
+///////////////////////////////////////////////////////////////////////
+/*
+ * List of tags.
+ */
+type TagList struct {
+	list	[]*Tag
+}
+
+//---------------------------------------------------------------------
+/*
+ * Create a new (empty) list of tags.
+ * @return *TagList - reference to new tag list
+ */
+func NewTagList() *TagList {
+	return &TagList {
+		list:	make ([]*Tag, 0),	
+	}
+}
+
+//---------------------------------------------------------------------
+/*
+ * Add a new tag to the list.
+ * @param name string - name of tag
+ * @param attr map[string]string - list of attributes
+ */
+func (t *TagList) Put (tag *Tag) {
+	t.list = append (t.list, tag)
+}
+
+//---------------------------------------------------------------------
+/*
+ * Get and remove next tag from list.
+ * @return *Tag - reference to tag
+ */
+func (t *TagList) Get() *Tag {
+	if len(t.list) == 0 {
+		return nil
+	}
+	tag := t.list[0]
+	t.list = t.list[1:]
+	return tag
+}
+
+//---------------------------------------------------------------------
+/*
+ * Get number of tags in list.
+ * @return int - number of tags available
+ */
+func (t *TagList) Count() int {
+	return len(t.list)
+}
 
 ///////////////////////////////////////////////////////////////////////
 // Helper functions and methods.
@@ -47,25 +140,29 @@ const (
  * HTML page, so that it behaves like a genuine access if monitored by an
  * eavesdropper. This function adds to an existing list of ressources (from
  * a previous cover server response).
- * @param rdr *bufio.Reader - buffered reader for parsing
+ * @param rdr *io.Reader - buffered reader for parsing
  * @param list map[string]string - (current) list of inline ressources
  */
-func parseHTML (rdr *bufio.Reader, list []*Tag) {
+func parseHTML (rdr io.Reader, list *TagList) {
 	
 	// try to use GO html tokenizer to parse the content
 	tk := html.NewTokenizer (rdr)
-	for {
+	loop: for {
 		// get next HTML tag
 		toktype := tk.Next()
 		if toktype == html.ErrorToken {
 			// parsing error: most probable case is that the tag spans
 			// fragments. This is only a problem if it concerns a tag
 			// for possible translation (currently unhandled)
-			logger.Println (logger.ERROR, "[html] Error parsing content")
-			break
+			switch tk.Error() {
+				case io.ErrUnexpectedEOF:
+					logger.Println (logger.ERROR, "[html] Error parsing content: " + tk.Error().String())
+				case os.EOF:
+					break loop
+			}
 		}
 		if toktype == html.StartTagToken || toktype == html.SelfClosingTagToken {
-			// we are only interessted in certain tags
+			// we are only interested in certain tags
 			tag,_ := tk.TagName()
 			name := string(tag)
 			switch name {
@@ -77,7 +174,7 @@ func parseHTML (rdr *bufio.Reader, list []*Tag) {
 					if _,ok := attrs["src"]; ok {
 						// add external reference to script file
 						t := NewTag ("script", attrs)
-						list = append (list, t)
+						list.Put (t)
 						logger.Println (logger.DBG, "[html] => " + t.String())
 					}
 
@@ -87,7 +184,7 @@ func parseHTML (rdr *bufio.Reader, list []*Tag) {
 				case "img":
 					attrs := getAttrs (tk)
 					t := NewTag ("img", attrs)
-					list = append (list, t)
+					list.Put (t)
 					logger.Println (logger.DBG, "[html] => " + t.String())
 					
 				//-----------------------------------------------------
