@@ -25,53 +25,15 @@ package main
 import (
 	"net"
 	"strings"
+	"bytes"
+	"os"
+	"io"
 	"bufio"
+	"compress/gzip"
 	"gospel/logger"
 )
 
 ///////////////////////////////////////////////////////////////////////
-// Public types
-
-/*
- * Tag represents all HTML tags from a cover server response (content)
- * that refer to an external ressource and therefore must be conserved
- * and translated to match the profile of a "normal" usage of the cover
- * site. (Resources are replaces by "innocent" and "unharnful" content
- * on the fly during the response handling for non-HTML ressources)
- */
-type Tag struct {
-	name	string
-	attrs	map[string]string
-}
-
-//---------------------------------------------------------------------
-/*
- * Instantiate a new Tag object with given parameters.
- * @param n string - name of tag
- * @param a map[string]string - list of attributes
- * @return *Tag - pointer to new instance
- */
-func NewTag (n string, a map[string]string) *Tag {
-	return &Tag {
-		name:	n,
-		attrs:	a,
-	}
-}
-
-//---------------------------------------------------------------------
-/*
- * Stringify tag
- * @return string - string representation of tag
- */
-func (t *Tag) String() string {
-	res := "<" + t.name
-	for key,val := range t.attrs {
-		res += " " + key + "=" + val
-	}
-	return res + "/>"
-}
-
-//=====================================================================
 /*
  * State information for cover server connections.
  */
@@ -79,16 +41,17 @@ type State struct {
 	reqBalance		int			// size balance for request translation
 	reqRessource	string		// ressource requested
 	respPending		string		// pending (HTML) response
+	respEnc			string		// response encoding
 	respBalance		int			// size balance for response translation
 	respCont		bool		// response continuation?
 	respSize		int			// expected response size (total length)
 	respType		string		// format identifier for response content (mime type)
 	respBinary		bool		// pending response is binary data?
-	respTags		[]*Tag		// list of tags to be included in response
+	respTags		*TagList	// list of tags to be included in response
 	respHtmlDone	bool		// HTML closed?
 }
 
-//=====================================================================
+///////////////////////////////////////////////////////////////////////
 /*
  * Cover server instance (stateful)
  */
@@ -99,9 +62,7 @@ type Cover struct {
 	hdlr		UploadHandler				// handler of cover uploads
 }
 
-///////////////////////////////////////////////////////////////////////
-// Public types
-
+//---------------------------------------------------------------------
 /*
  * Create a new cover server instance
  * @return *Cover - pointer to cover server instance
@@ -112,7 +73,7 @@ func NewCover() *Cover {
 }
 
 ///////////////////////////////////////////////////////////////////////
-// Public methods
+// Public methods for Cover instance
 
 /*
  * Connect to cover server
@@ -134,12 +95,13 @@ func (c *Cover) connect () net.Conn {
 		reqBalance:		0,
 		reqRessource:	"",
 		respPending:	"",
+		respEnc:		"",
 		respBalance:	0,
 		respCont:		false,
 		respSize:		0,
 		respType:		"text/html",
 		respBinary:		false,
-		respTags:		make ([]*Tag, 0),
+		respTags:		NewTagList(),
 		respHtmlDone:	false,
 	} 
 	return conn
@@ -188,7 +150,11 @@ func (c *Cover) xformReq (s *State, data []byte, num int) []byte {
 	// assemble transformed request
 	rdr := bufio.NewReader (strings.NewReader (inStr))
 	req := ""
-	complete := false
+	complete := false				// parsing done?
+	hasContentEncoding := false		// expected content encoding defined?
+	//hasTransferEncoding := false	// expected transfer encoding defined?
+	mime := "text/html"				// expected content type
+	
 	for {
 		// get next line (terminated by line break)
 		b,broken,_ := rdr.ReadLine()
@@ -207,6 +173,8 @@ func (c *Cover) xformReq (s *State, data []byte, num int) []byte {
 			// form. Translated entries start with "/&".
 			// It is assumed, that a "GET" line is one of the first
 			// lines in a request and therefore never fragmented.
+			// N.B.: We also force HTTP/1.0 to ensure that no
+			// chunking is used by the server (easier parsing).
 			//---------------------------------------------------------
 			case strings.HasPrefix (line, "GET "):
 				// split line into parts
@@ -224,7 +192,7 @@ func (c *Cover) xformReq (s *State, data []byte, num int) []byte {
 				}
 				// assemble new ressource request
 				s.reqRessource = uri
-				req += "GET " + uri + " " + parts[2] + "\n"
+				req += "GET " + uri + " HTTP/1.0\n"
 				// keep balance
 				s.reqBalance += (len(parts[1]) - len(uri))
 			
@@ -252,6 +220,46 @@ func (c *Cover) xformReq (s *State, data []byte, num int) []byte {
 			// @@@TODO: Is this the right place to balance the translation? 
 
 			//---------------------------------------------------------
+			// Acceptable content encoding: we only want plain HTML
+			//---------------------------------------------------------
+			case strings.HasPrefix (line, "Accept-Encoding: "):
+				// split line into parts
+				parts := strings.Split (line, " ")
+				hasContentEncoding = true
+				if mime == "text/html" && parts[1] != "identity" {
+					// change to identity encoding for HTML pages
+					repl := "Accept-Encoding: identity"
+					s.reqBalance += len(repl) - len(line)
+					req += repl + "\n"
+				} else {
+					req += line + "\n"
+				}
+/*
+			//---------------------------------------------------------
+			// Acceptable transfer encoding: we only want no chunking
+			//---------------------------------------------------------
+			case strings.HasPrefix (line, "Transfer-Encoding: "):
+				// split line into parts
+				parts := strings.Split (line, " ")
+				hasTransferEncoding = true
+				if mime == "text/html" && parts[1] != "identity" {
+					// change to identity transfer for HTML pages
+					repl := "Transfer-Encoding: identity"
+					s.reqBalance += len(repl) - len(line)
+					req += repl + "\n"
+				} else {
+					req += line + "\n"
+				}
+*/
+			//---------------------------------------------------------
+			// Expected content type
+			//---------------------------------------------------------
+			case strings.HasPrefix (line, "Content-Type: "):
+				// split line into parts
+				parts := strings.Split (line, " ")
+				mime = parts[1]
+
+			//---------------------------------------------------------
 			// add unchanged request lines. 
 			//---------------------------------------------------------
 			default:
@@ -263,6 +271,22 @@ func (c *Cover) xformReq (s *State, data []byte, num int) []byte {
 	}
 	// check if the request processing has completed
 	if complete {
+		if mime == "text/html" {
+			if !hasContentEncoding {
+				// enforce identity encoding for HTML pages
+				repl := "Accept-Encoding: identity"
+				s.reqBalance += len(repl)
+				req += repl + "\n"
+			}
+/*
+			if !hasTransferEncoding {
+				// enforce identity transfer for HTML pages
+				repl := "Transfer-Encoding: identity"
+				s.reqBalance += len(repl)
+				req += repl + "\n"
+			}
+*/
+		}	
 		// add delimiting empty line
 		req += "\n"
 		if s.reqBalance != 0 {
@@ -284,32 +308,44 @@ func (c *Cover) xformReq (s *State, data []byte, num int) []byte {
  */
 func (c *Cover) xformResp (s *State, data []byte, num int) []byte {
 
-	inStr := string(data[0:num])
+	// log incoming packet
 	logger.Printf (logger.DBG_HIGH, "[cover] %d bytes received from cover server.\n", num)
-	logger.Println (logger.DBG_ALL, "[cover] Incoming response:\n" + inStr + "\n")
 
-	rdr := bufio.NewReader (strings.NewReader (inStr))
+	// setup reader and response
+	rdr := bytes.NewBuffer (data[0:num])
 	resp := ""
+	
+	// initial response package
 	if !s.respCont {
 		// start of new response encountered: parse header fields
-		for {
-			// get next line (terminated by line break); if the
-			// line is continued on the next block
-			b,broken,_ := rdr.ReadLine()
-			if b == nil || len(b) == 0 {
-				if broken {
-					// header is not complete: wait for next response fragment
-					return data
-				}
-				// we have parsed the header; continue with body
-				break
+		hdr: for {
+			// get next line (terminated by line break)
+			line,err := rdr.ReadString('\n')
+			line = strings.TrimRight (line, "\n\r")
+			if err != nil {
+				// header is not complete: wait for next response fragment
+				logger.Println (logger.WARN, "[cover] Response header fragmented!")
+				logger.Println (logger.DBG, "[cover] Assembled response:\n" + resp)
+				resp += "\n\n"
+				return []byte(resp)
 			}
-			line := string(b)
-			// assemble response
-			resp += line + "\n"
+			// check if header is available at all..
+			if strings.HasPrefix (line, "<!") {
+				logger.Println (logger.INFO, "[cover] No response header found: " + line)
+				break hdr
+			}
 			
 			// parse response header
 			switch {
+				//-----------------------------------------------------
+				// Header parsing complete
+				//-----------------------------------------------------
+				case len(line) == 0:
+					// we have parsed the header; continue with body
+					logger.Println (logger.DBG_ALL, "[cover] Incoming response header:\n" + resp)
+					// drop length encoding on gzip content
+					break hdr
+			
 				//-----------------------------------------------------
 				// Content-Type:
 				//-----------------------------------------------------
@@ -326,12 +362,42 @@ func (c *Cover) xformResp (s *State, data []byte, num int) []byte {
 							s.respBinary = true
 					}
 					logger.Printf (logger.DBG_HIGH, "[cover] response is binary? %v\n",s.respBinary)
+
+				//-----------------------------------------------------
+				// Content-Encoding:
+				//-----------------------------------------------------
+				case strings.HasPrefix (line, "Content-Encoding: "):
+					// split line into parts
+					parts := strings.Split (line, " ")
+					s.respEnc = parts[1]
+					logger.Println (logger.DBG_HIGH, "[cover] response encoding: " + s.respEnc)
+			}
+			// assemble response
+			resp += line + "\n"
+		}
+		// add delimiter line
+		resp += "\n"
+		// adjust remaining content size
+		num -= len(resp)
+	}
+
+	// continue response handling: create content reader based on encoding
+	var crdr io.Reader = rdr
+	switch s.respEnc {
+		// zip'd content
+		case "gzip": {
+			rdr.ReadString ('\n')
+			var err os.Error
+			crdr,err = gzip.NewReader (rdr)
+			if err != nil {
+				logger.Println (logger.ERROR, "[cover] Failed to create zip'd reader!")
+				return []byte(resp)
 			}
 		}
-		// add the delimiter (empty) line
-		resp += "\n"
-		// we have parsed the response header; now process the response body
+	}
 
+	// are we still in the initial response packet?	
+	if !s.respCont {
 		//-------------------------------------------------------------
 		// (initial) HTML response		
 		//-------------------------------------------------------------		
@@ -340,7 +406,6 @@ func (c *Cover) xformResp (s *State, data []byte, num int) []byte {
 			// to initialize response.
 			s.respPending = htmlIntro + c.getReplacementBody (s.reqRessource)
 		}
-		
 		// we are now in continuation mode.
 		s.respCont = true
 	}
@@ -350,8 +415,9 @@ func (c *Cover) xformResp (s *State, data []byte, num int) []byte {
 	//-------------------------------------------------------------		
 	if strings.HasPrefix (s.respType, "text/html") {
 		// do content translation (collect ressource tags)
-		parseHTML (rdr, s.respTags)
+		parseHTML (crdr, s.respTags)
 		resp += c.assembleHTML (s, num)
+		logger.Println (logger.DBG_ALL, "[cover] Translated response:\n" + resp)
 		// return response data
 		return []byte(resp)
 	}
@@ -387,20 +453,24 @@ func (c *Cover) assembleHTML (s *State, size int) string {
 	}
 	
 	// add ressources (if any are pending)
-	if len(s.respTags) > 0 {
-		next := 0
-		for pos,tag := range s.respTags {
-			inl := c.translateTag (tag)
-			if len(inl) < size {
-				resp += inl
-				size -= len(inl)
-				next = pos+1
-			} else {
-				break
-			}
+	for s.respTags.Count() > 0 {
+		// get next tag
+		tag := s.respTags.Get()
+		if tag == nil {
+			break
 		}
-		// removed written tags
-		s.respTags = s.respTags[next:]
+		// translate tag for client
+		inl := c.translateTag (tag)
+		// check if we can add the tag?
+		if len(inl) < size {
+			// yes: add it to response
+			resp += inl
+			size -= len(inl)
+		} else {
+			// no: put it back
+			s.respTags.Put (tag)
+			break
+		}
 	}
 				
 	if !s.respHtmlDone {
