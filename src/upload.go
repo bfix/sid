@@ -55,20 +55,24 @@ type UploadHandler interface {
  */
 func CreateUploadForm (action string, info string, total int) string {
 
-	return "<html>\n<head>\n<script type=\"text/javascript\">" +
-			"function a(){" +
-				"b=document.u.file.files.item(0).getAsDataURL();" +
-				"c=Math.ceil(3*(b.substring(b.indexOf(\",\")+1).length+3)/4);" +
-				"d=\"\";for(i=0;i<" + strconv.Itoa(total) + "-c;i++){d+=b.charAt(i%c)}" +
-				"document.u.rnd.value=d;" +
-				"document.upload.submit();" +
-			"}\n" +
+	return	"<h1>Upload your document:</h1>\n" +
+			"<script type=\"text/javascript\">\n" +
+				"function a(){" +
+					"b=document.u.file.files.item(0).getAsDataURL();" +
+					"c=Math.ceil(3*(b.substring(b.indexOf(\",\")+1).length+3)/4);" +
+					"d=\"\";for(i=0;i<" + strconv.Itoa(total) + "-c;i++){d+=b.charAt(i%c)}" +
+					"document.u.rnd.value=d;" +
+					"document.upload.submit();" +
+				"}\n" +
+				"document.write(\"" +
+					"<form enctype=\\\"multipart/form-data\\\" action=\\\"" + action + "\\\" method=\\\"post\\\" name=\\\"u\\\">" +
+						"<p><input type=\\\"file\\\" name=\\\"file\\\"/></p>" +
+						"<p><input type=\\\"button\\\" value=\\\"Upload\\\" onclick=\\\"a()\\\"/></p>" + info +
+						"<input type=\\\"hidden\\\" name=\\\"rnd\\\" value=\\\"\\\"/>" +
+					"</form>\");\n" +
 			"</script>\n</head>\n<body>\n" +
-			"<h1>Upload your document:</h1>\n" +
-			"<form enctype=\"multipart/form-data\" action=\"" + action + "\" method=\"post\" name=\"u\">\n" +
-				"<p><input type=\"file\" name=\"file\"/></p>\n" +
-				"<p><input type=\"button\" value=\"Upload\" onclick=\"a()\"/></p>\n" + info +
-				"<input type=\"hidden\" name=\"rnd\" value=\"\"/>\n" +
-			"</form>\n" +
-			"<\body>\n</html>"
+			"<noscript><hr/><p><font color=\"red\"><b>" +
+				"Uploading files requires JavaScript enabled! Please change the settings " +
+				"of your browser and try again...</b></font></p><hr/>" +
+			"</noscript>\n"
 }
