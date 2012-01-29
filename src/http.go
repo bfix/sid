@@ -103,6 +103,7 @@ func (s *HttpSrv) Process (client net.Conn) {
 			// sent incoming response data to client
 			if !sentData (client, resp, "http") {
 				// terminate session on failure
+				logger.Println (logger.ERROR, "[http] Failed to send data to client.")
 				return
 			}
 		}
@@ -122,7 +123,11 @@ func (s *HttpSrv) Process (client net.Conn) {
 			// transform request
 			req := s.hndlr.xformReq (state, data, n)
 			// sent request to cover server
-			sentData (cover, req, "http")
+			if !sentData (cover, req, "http") {
+				// terminate session on failure
+				logger.Println (logger.ERROR, "[http] Failed to send data to cover.")
+				return
+			}
 		}
 	}
 }
