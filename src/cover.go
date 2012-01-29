@@ -78,6 +78,7 @@ func (t *Tag) String() string {
 type State struct {
 	reqBalance		int			// size balance for request translation
 	reqRessource	string		// ressource requested
+	respPending		string		// pending (HTML) response
 	respBalance		int			// size balance for response translation
 	respCont		bool		// response continuation?
 	respSize		int			// expected response size (total length)
@@ -94,7 +95,7 @@ type State struct {
 type Cover struct {
 	server		string						// "host:port" of cover server
 	states		map[net.Conn]*State			// state of active connections
-	htmls		map[string]string			// HTML page replacements
+	htmls		map[string]string			// HTML body replacements
 	hdlr		UploadHandler				// handler of cover uploads
 }
 
@@ -132,6 +133,7 @@ func (c *Cover) connect () net.Conn {
 	c.states[conn] = &State {
 		reqBalance:		0,
 		reqRessource:	"",
+		respPending:	"",
 		respBalance:	0,
 		respCont:		false,
 		respSize:		0,
@@ -328,15 +330,28 @@ func (c *Cover) xformResp (s *State, data []byte, num int) []byte {
 		}
 		// add the delimiter (empty) line
 		resp += "\n"
-	}
+		// we have parsed the response header; now process the response body
 
-	// we have parsed the response header; now process the response body
-	if strings.HasPrefix (s.respType, "text/") {
-		// do content translation/assembly
-		parseHTML (rdr, s.respTags)
-		resp += c.assembleHTML (s, num)
+		//-------------------------------------------------------------
+		// (initial) HTML response		
+		//-------------------------------------------------------------		
+		if strings.HasPrefix (s.respType, "text/html") {
+			// start of a new HTML response. Use pre-defined HTM page
+			// to initialize response.
+			s.respPending = htmlIntro + c.getReplacementBody (s.reqRessource)
+		}
+		
 		// we are now in continuation mode.
 		s.respCont = true
+	}
+
+	//-------------------------------------------------------------
+	// assmble HTML response		
+	//-------------------------------------------------------------		
+	if strings.HasPrefix (s.respType, "text/html") {
+		// do content translation (collect ressource tags)
+		parseHTML (rdr, s.respTags)
+		resp += c.assembleHTML (s, num)
 		// return response data
 		return []byte(resp)
 	}
@@ -356,15 +371,19 @@ func (c *Cover) xformResp (s *State, data []byte, num int) []byte {
  * @return []byte - assembled response
  */
 func (c *Cover) assembleHTML (s *State, size int) string {
+
+	// emit pending reponse data first
 	resp := ""
-	if !s.respCont {
-		// start of a new HTML response. Use pre-defined HTM page
-		// for content and add as many pending tags as possible.
-		page := c.getReplacementPage (s.reqRessource)
-		// compute remaining size
-		size -= len(page)
-		// we have a pre-defined page.
-		resp = page
+	pending := len(s.respPending)
+	switch {
+		case pending > size:
+			resp = string(s.respPending[0:size])
+			s.respPending = string(s.respPending[size:])
+			return resp
+		case pending > 0:
+			resp = s.respPending
+			size -= pending
+			s.respPending = ""
 	}
 	
 	// add ressources (if any are pending)
@@ -386,10 +405,9 @@ func (c *Cover) assembleHTML (s *State, size int) string {
 				
 	if !s.respHtmlDone {
 		// close HTML if space allows
-		htmlOff := "</body></html>"
-		if len(htmlOff) < size {
-			resp += htmlOff
-			size -= len(htmlOff)
+		if len(htmlOutro) < size {
+			resp += htmlOutro
+			size -= len(htmlOutro)
 			resp += padding (size)
 			s.respHtmlDone = true
 		} else {
@@ -410,9 +428,9 @@ func (c *Cover) assembleHTML (s *State, size int) string {
  * replacement is defined, return an error page. If the replacement
  * is tagged "[Upload]", generate a upload form
  * @param res string - name of the HTML ressource
- * @return string - page content
+ * @return string - HTML body content
  */
-func (c *Cover) getReplacementPage (res string) string {
+func (c *Cover) getReplacementBody (res string) string {
 
 	// lookup pre-defined replacement page
 	page,ok := c.htmls[res]
