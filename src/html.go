@@ -26,6 +26,7 @@ import (
 	"io"
 	"os"
 	"html"
+	"strings"
 	"gospel/logger"
 )
 
@@ -33,17 +34,17 @@ import (
 // Constants
 
 const (
-	htmlIntro	= "<!DOCTYPE HTML>\n<html><body>"
-	htmlOutro	= "</body></html>"
+	htmlIntro	= "<!DOCTYPE HTML>\n<html>\n"
+	htmlOutro	= "</body>\n</html>\n"
 )
 
 ///////////////////////////////////////////////////////////////////////
 /*
  * Tag represents all HTML tags from a cover server response (content)
- * that refer to an external ressource and therefore must be conserved
+ * that refer to an external resource and therefore must be conserved
  * and translated to match the profile of a "normal" usage of the cover
  * site. (Resources are replaces by "innocent" and "unharnful" content
- * on the fly during the response handling for non-HTML ressources)
+ * on the fly during the response handling for non-HTML resources)
  */
 type Tag struct {
 	name	string
@@ -72,7 +73,7 @@ func NewTag (n string, a map[string]string) *Tag {
 func (t *Tag) String() string {
 	res := "<" + t.name
 	for key,val := range t.attrs {
-		res += " " + key + "=" + val
+		res += " " + key + "=\"" + val + "\""
 	}
 	return res + "/>"
 }
@@ -135,18 +136,23 @@ func (t *TagList) Count() int {
 /*
  * Handle HTML-like content: since we can't be sure that the body is error-
  * free* HTML, we need a lazy parser for the fields we are interested in.
- * The parser builds a list of inline ressources referenced in the HTML file;
- * these are the ressources the client browser will request when loading the
+ * The parser builds a list of inline resources referenced in the HTML file;
+ * these are the resources the client browser will request when loading the
  * HTML page, so that it behaves like a genuine access if monitored by an
- * eavesdropper. This function adds to an existing list of ressources (from
+ * eavesdropper. This function adds to an existing list of resources (from
  * a previous cover server response).
  * @param rdr *io.Reader - buffered reader for parsing
- * @param list map[string]string - (current) list of inline ressources
+ * @param links *TagList - (current) list of inline ressources (header)
+ * @param list *TagList - (current) list of inline ressources (body)
+ * @return bool - end of parsing (HTML closed)?
  */
-func parseHTML (rdr io.Reader, list *TagList) {
+func parseHTML (rdr io.Reader, links *TagList, list *TagList) bool {
 	
 	// try to use GO html tokenizer to parse the content
 	tk := html.NewTokenizer (rdr)
+	stack := make([]*Tag,0)
+	var tag *Tag
+	closed := false
 	loop: for {
 		// get next HTML tag
 		toktype := tk.Next()
@@ -161,50 +167,129 @@ func parseHTML (rdr io.Reader, list *TagList) {
 					break loop
 			}
 		}
-		if toktype == html.StartTagToken || toktype == html.SelfClosingTagToken {
-			// we are only interested in certain tags
-			tag,_ := tk.TagName()
-			name := string(tag)
-			switch name {
-				//-----------------------------------------------------
-				// external script files
-				//-----------------------------------------------------
-				case "script":
-					attrs := getAttrs (tk)
-					if _,ok := attrs["src"]; ok {
-						// add external reference to script file
-						t := NewTag ("script", attrs)
-						list.Put (t)
-						logger.Println (logger.DBG, "[html] => " + t.String())
-					}
-
-				//-----------------------------------------------------
-				// external image
-				//-----------------------------------------------------
-				case "img":
-					attrs := getAttrs (tk)
-					t := NewTag ("img", attrs)
-					list.Put (t)
-					logger.Println (logger.DBG, "[html] => " + t.String())
-					
-				//-----------------------------------------------------
-				// unknown
-				//-----------------------------------------------------
-				default:
-					logger.Println (logger.DBG_ALL, "*** " + name)
+		if toktype == html.StartTagToken {
+			// we are starting a tag. push to stack until EndTagToken is encountered.
+			tag = readTag (tk)
+			if tag != nil {
+				logger.Println (logger.DBG_ALL, "[cover] tag pushed to stack: " + tag.String())
+				stack = append (stack, tag)
 			}
+			continue loop
+		} else if toktype == html.EndTagToken {
+			n,_ := tk.TagName()
+			name := string(n)
+			pos := len(stack) - 1
+			if pos >= 0 && stack[pos].name == name {
+				// found matching tag
+				tag = stack[pos]
+				stack = stack[0:pos]
+				logger.Println (logger.DBG_ALL, "[cover] tag popped from stack: " + tag.String())
+			} else {
+				if name == "html" {
+					logger.Println (logger.DBG_ALL, "*** </html>")
+					closed = true
+				}
+				continue loop
+			}
+		} else if toktype == html.SelfClosingTagToken {
+			tag = readTag (tk)
+			if tag == nil {
+				continue loop
+			}
+			logger.Println (logger.DBG_ALL, "[cover] direct tag : " + tag.String())
+		} else {
+			continue loop
+		}
+
+		// add to appropriate tag list		
+		switch {
+			case tag.name == "script" || tag.name == "img":
+				list.Put (tag)
+				logger.Println (logger.DBG, "[html] body => " + tag.String())
+
+			case tag.name == "link":
+				links.Put (tag)
+				logger.Println (logger.DBG, "[html] hdr => " + tag.String())
+/*					
+			default:
+				logger.Println (logger.DBG_ALL, "*** " + tag.String())
+*/
 		}
 	}
+	return closed
 }
 
 //---------------------------------------------------------------------
 /*
- * Get list of attributes for a tag
+ * Read current tag with attributes.
+ * @param tk *html.Tokenizer - tokenizer instance
+ * @return *Tag - reference to read tag
+ */
+func readTag (tk *html.Tokenizer) *Tag {
+
+	// we are only interested in certain tags
+	tag,_ := tk.TagName()
+	name := string(tag)
+	switch name {
+		//-----------------------------------------------------
+		// external script files
+		//-----------------------------------------------------
+		case "script":
+			attrs := getAttrs (tk)
+			if attrs != nil {
+				if _,ok := attrs["src"]; ok {
+					// add external reference to script file
+					return NewTag ("script", attrs)
+				}
+			}
+	
+		//-----------------------------------------------------
+		// external image
+		//-----------------------------------------------------
+		case "img":
+			attrs := getAttrs (tk)
+			if attrs != nil {
+				return NewTag ("img", attrs)
+			}
+	
+		//-----------------------------------------------------
+		// external links (style sheets)
+		//-----------------------------------------------------
+		case "link":
+			attrs := getAttrs (tk)
+			if attrs != nil {
+				if _,ok := attrs["href"]; ok {
+					// add external reference to link
+					return NewTag ("link", attrs)
+				}
+			}
+	}
+	// no tag processed.
+	return nil
+}
+
+//---------------------------------------------------------------------
+/*
+ * Get list of attributes for a tag.
+ * If the tag is at the end of a HTML fragment and not all attributes
+ * can be read by the tokenizer, this call terminates with a "nil"
+ * map to indicate failure. The tag is than dropped (for an eavesdropper
+ * this looks like a cached resource)
  * @param tk *html.Tokenizer - tokenizer instance
  * @return map[string]string - list of attributes
  */
-func getAttrs (tk *html.Tokenizer) map[string]string {
-	list := make (map[string]string)			
+func getAttrs (tk *html.Tokenizer) (list map[string]string) {
+
+	// handle panic during parsing
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Printf (logger.WARN, "[html] Skipping fragmented tag: %v\n", r)
+			list = nil
+        }
+	}();
+	
+	// parse attributes from HTML text
+	list = make (map[string]string)			
 	for {
 		key,val,more := tk.TagAttr()
 		list[string(key)] = string(val)
@@ -212,7 +297,7 @@ func getAttrs (tk *html.Tokenizer) map[string]string {
 			break
 		}	
 	}
-	return list
+	return
 }
 
 //---------------------------------------------------------------------
@@ -252,4 +337,32 @@ func errorBody (severe bool) string {
 	}
 	return  "<h1>Error occurred</h1>\n" +
 			"Please return to previous page and try again.\n"
+}
+
+//=====================================================================
+/*
+ * Translate URI (external <-> local): 
+ * Any URI of the form "<scheme>://<server>/<path>/<to>/<resource...>"
+ * is transformed to an absolute path on on the sending server (that is
+ * the SID instance) that can later be translated back to its original
+ * form; it looks like "/&<scheme>/<server>/<path>/<to>/<resource...>"
+ * @param uri string - incoming uri
+ * @return string - translated uri
+ */
+func translateURI (uri string) string {
+
+	if pos := strings.Index (uri, "://"); pos != -1 {
+		// we have an absolute URI that needs translation
+		scheme := string(uri[0:pos])
+		res := string(uri[pos+2:])
+		return "/&" + scheme + res
+	} else if strings.HasPrefix (uri, "/&") {
+		// we have a local URI that needs translation
+		pos := strings.Index (string(uri[2:]), "/")
+		scheme := string(uri[2:pos+2])
+		res := string(uri[pos+2:])
+		return scheme + ":/" + res 
+	}
+	// no translation necessary
+	return uri
 }
