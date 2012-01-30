@@ -51,8 +51,6 @@ func (c *ControlSrv) Process (client net.Conn) {
 	b := bufio.NewReadWriter (bufio.NewReader(client), bufio.NewWriter(client))
 	for repeat := true; repeat; {
 	
-		// prepare state information for output
-
 		// show control menu			
 		b.WriteString ("\n-----------------------------------\n")
 		b.WriteString ("Change (L)og level [" + logger.GetLogLevel() + "]\n")

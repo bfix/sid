@@ -47,6 +47,7 @@ type Config struct {
 	HttpsPort	int			// port for HTTPS sessions
 }
 
+//---------------------------------------------------------------------
 /*
  * Configuration data instance (with default values)
  */

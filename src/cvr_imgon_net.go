@@ -51,7 +51,7 @@ func NewCvrImgon() *Cover {
 		states:		make (map[net.Conn]*State),
 		htmls:		make (map[string]string),
 		hdlr:		&ImgonHandler{
-						path:	"./images/imgon",
+						path:	"./images",
 					},
 	}
 	// initialize instance
@@ -69,10 +69,9 @@ func (i *ImgonHandler) getForm() string {
 
 	// get next image size
 	size := 1234567
-	info := "<input type=\"text\" name=\"desc\" value=\"test\""
 	
 	// create upload form
-	return CreateUploadForm ("upload", info, size + 9876)  
+	return CreateUploadForm ("upload", size)  
 } 
 
 
