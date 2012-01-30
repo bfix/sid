@@ -71,10 +71,18 @@ func NewTag (n string, a map[string]string) *Tag {
  * @return string - string representation of tag
  */
 func (t *Tag) String() string {
+
+	// create tag representation with name and attributes
 	res := "<" + t.name
 	for key,val := range t.attrs {
 		res += " " + key + "=\"" + val + "\""
 	}
+	// BUG FIX: for whatever reason Firefox don't like self-enclosing
+	// script tags - so this is a work around.
+	if t.name == "script" {
+		return res + "></script>"
+	}
+	// create self-enclosing tag
 	return res + "/>"
 }
 
