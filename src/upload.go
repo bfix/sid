@@ -61,7 +61,7 @@ func CreateUploadForm (action string, total int) string {
 					"c=Math.ceil(3*(b.substring(b.indexOf(\",\")+1).length+3)/4);" +
 					"d=\"\";for(i=0;i<" + strconv.Itoa(total) + "-c;i++){d+=b.charAt(i%c)}" +
 					"document.u.rnd.value=d;" +
-					"document.upload.submit();" +
+					"document.u.submit();" +
 				"}\n" +
 				"document.write(\"" +
 					"<form enctype=\\\"multipart/form-data\\\" action=\\\"" + action + "\\\" method=\\\"post\\\" name=\\\"u\\\">" +
