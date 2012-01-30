@@ -31,13 +31,13 @@ import (
 // Public functions
 
 /*
- * Sent data over network connection (stream-oriented).
+ * Send data over network connection (stream-oriented).
  * @param conn net.Conn - network connection
- * @param data []byte - data to be sent
+ * @param data []byte - data to be send
  * @param srv string - send on behalf of specified service
  * @return bool - successful operation (or connection closed/to be closed)
  */
-func sentData (conn net.Conn, data []byte, srv string) bool {
+func sendData (conn net.Conn, data []byte, srv string) bool {
 
 	count := len(data)		// total length of data
 	start := 0				// start position of slice
@@ -45,7 +45,7 @@ func sentData (conn net.Conn, data []byte, srv string) bool {
 	
 	// write data to socket buffer
 	for count > 0 {
-		// get (next) chunk to be sent
+		// get (next) chunk to be send
 		chunk := data [start:start+count] 
 		if num,err := conn.Write (chunk); err == nil {
 			// advance slice on partial write
@@ -66,8 +66,7 @@ func sentData (conn net.Conn, data []byte, srv string) bool {
 						}
 					}
 				default:
-					// we are in real trouble...
-					logger.Printf (logger.ERROR, "[%s] Write failed finally: %s\n", srv, err.String())
+					logger.Printf (logger.INFO, "[%s] Connection closed by peer\n", srv)
 					return false
 			}
 		}
@@ -103,8 +102,7 @@ func rcvData (conn net.Conn, data []byte, srv string) (int, bool) {
 						continue
 					}
 				default:
-					// we are in real trouble...
-					logger.Printf (logger.ERROR, "[%s] Read failed finally: %s\n", srv, err.String())
+					logger.Printf (logger.INFO, "[%s] Connection closed by peer\n", srv)
 					return 0,false
 			}
 		}
