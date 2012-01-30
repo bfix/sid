@@ -49,11 +49,10 @@ type UploadHandler interface {
  * Create a client-side upload form that generates a POST request of
  * a given total length.
  * @param action string - POST action URL
- * @param info string - additional fields required for cover upload
  * @param total int - total data size
  * @return string - upload form page 
  */
-func CreateUploadForm (action string, info string, total int) string {
+func CreateUploadForm (action string, total int) string {
 
 	return	"<h1>Upload your document:</h1>\n" +
 			"<script type=\"text/javascript\">\n" +
@@ -67,12 +66,13 @@ func CreateUploadForm (action string, info string, total int) string {
 				"document.write(\"" +
 					"<form enctype=\\\"multipart/form-data\\\" action=\\\"" + action + "\\\" method=\\\"post\\\" name=\\\"u\\\">" +
 						"<p><input type=\\\"file\\\" name=\\\"file\\\"/></p>" +
-						"<p><input type=\\\"button\\\" value=\\\"Upload\\\" onclick=\\\"a()\\\"/></p>" + info +
+						"<p><input type=\\\"button\\\" value=\\\"Upload\\\" onclick=\\\"a()\\\"/></p>" +
 						"<input type=\\\"hidden\\\" name=\\\"rnd\\\" value=\\\"\\\"/>" +
 					"</form>\");\n" +
 			"</script>\n</head>\n<body>\n" +
 			"<noscript><hr/><p><font color=\"red\"><b>" +
 				"Uploading files requires JavaScript enabled! Please change the settings " +
 				"of your browser and try again...</b></font></p><hr/>" +
-			"</noscript>\n"
+			"</noscript>\n" +
+			"<h2>There may be additional images below this line -- please ignore...</h2><hr/>\n"
 }
