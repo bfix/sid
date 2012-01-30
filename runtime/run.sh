@@ -1,10 +1,9 @@
 #!/bin/bash
 
-cd runtime
 clear
 
 EXEC=""
-[ -x ../bin/src ] && EXEC=../bin/src
+[ -x ../_bin/src ] && EXEC=../_bin/src
 [ -x ../src/sid ] && EXEC=../src/sid
 
 echo "Running '${EXEC} $*' ..."
