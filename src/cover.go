@@ -25,6 +25,7 @@ package main
 import (
 	"net"
 	"strings"
+	"strconv"
 	"bytes"
 	"os"
 	"io"
@@ -36,19 +37,22 @@ import (
 ///////////////////////////////////////////////////////////////////////
 /*
  * State information for cover server connections.
+ * -respMode: a mode indicator for handling HTML responses
+ *      0: no HTML has been send; the "htmlIntro" sequence will be sent first
+ *      1: header data will be sent
+ *      2: normal HTML body is being processed
  */
 type State struct {
 	reqBalance		int			// size balance for request translation
-	reqRessource	string		// ressource requested
+	reqResource		string		// resource requested
 	respPending		string		// pending (HTML) response
 	respEnc			string		// response encoding
 	respBalance		int			// size balance for response translation
-	respCont		bool		// response continuation?
+	respMode		int			// response mode (0=init,1=hdr,2=body)
 	respSize		int			// expected response size (total length)
 	respType		string		// format identifier for response content (mime type)
-	respBinary		bool		// pending response is binary data?
-	respTags		*TagList	// list of tags to be included in response
-	respHtmlDone	bool		// HTML closed?
+	respHdr			*TagList	// list of tags for header
+	respTags		*TagList	// list of tags to be included in response body
 }
 
 ///////////////////////////////////////////////////////////////////////
@@ -93,16 +97,15 @@ func (c *Cover) connect () net.Conn {
 	// initialize struct with default data
 	c.states[conn] = &State {
 		reqBalance:		0,
-		reqRessource:	"",
+		reqResource:	"",
 		respPending:	"",
 		respEnc:		"",
 		respBalance:	0,
-		respCont:		false,
+		respMode:		0,
 		respSize:		0,
 		respType:		"text/html",
-		respBinary:		false,
+		respHdr:		NewTagList(),
 		respTags:		NewTagList(),
-		respHtmlDone:	false,
 	} 
 	return conn
 }
@@ -139,7 +142,7 @@ func (c *Cover) GetState (conn net.Conn) *State {
  * @param s *state - reference to state information
  * @param data []byte - request data from client
  * @param num int - length of request in bytes
- * @return []byte - transformed request (sent to cover server)
+ * @return []byte - transformed request (send to cover server)
  */
 func (c *Cover) xformReq (s *State, data []byte, num int) []byte {
 
@@ -154,6 +157,7 @@ func (c *Cover) xformReq (s *State, data []byte, num int) []byte {
 	hasContentEncoding := false		// expected content encoding defined?
 	//hasTransferEncoding := false	// expected transfer encoding defined?
 	mime := "text/html"				// expected content type
+	targetHost := c.server			// request resource from this host (default)
 	
 	for {
 		// get next line (terminated by line break)
@@ -181,17 +185,27 @@ func (c *Cover) xformReq (s *State, data []byte, num int) []byte {
 				parts := strings.Split (line, " ")
 				logger.Printf (logger.DBG_HIGH, "[cover] resource='%s'\n", parts[1])
 				
-				// check for back-translation
-				uri := parts[1]
-				if strings.HasPrefix (uri, "/&") {
-					// split into scheme and remaining URI
-					pos := strings.Index (string(uri[2:]), "/")
-					scheme := string(uri[2:pos])
-					res := string(uri[pos:])
-					uri = scheme + "://" + res 
-				}
-				// assemble new ressource request
-				s.reqRessource = uri
+				// perform translation (if required)
+				uri := translateURI (parts[1])
+				logger.Printf (logger.INFO, "[cover] URI translation: '%s' => '%s'\n", parts[1], uri)
+				
+				// if URI refers to an external host, split into
+				// host reference and resource specification
+				if pos := strings.Index (uri, "://"); pos != -1 {
+					pos = strings.Index (string(uri[pos+3:]), "/")
+					if pos != -1 {
+						targetHost = uri[0:pos]
+						uri = uri[pos:]
+						logger.Printf (logger.INFO, "[cover] URI split: '%s', '%s'\n", targetHost, uri)
+					} else { 
+						logger.Printf (logger.WARN, "[cover] URI split failed on '%s'\n", uri)
+					}
+				} else {
+					targetHost = c.server
+				}  
+
+				// assemble new resource request
+				s.reqResource = uri
 				req += "GET " + uri + " HTTP/1.0\n"
 				// keep balance
 				s.reqBalance += (len(parts[1]) - len(uri))
@@ -208,9 +222,9 @@ func (c *Cover) xformReq (s *State, data []byte, num int) []byte {
 				parts := strings.Split (line, " ")
 				// replace hostname reference 
 				logger.Printf (logger.DBG_HIGH, "[cover] Host replaced with '%s'\n", c.server)
-				req += "Host: " + c.server + "\n"
+				req += "Host: " + targetHost + "\n"
 				// keep track of balance
-				s.reqBalance += (len(parts[1]) - len(c.server))
+				s.reqBalance += (len(parts[1]) - len(targetHost))
 				
 			//---------------------------------------------------------
 			// try to get balance straight on language header line:
@@ -304,19 +318,21 @@ func (c *Cover) xformReq (s *State, data []byte, num int) []byte {
  * @param s *state - reference to state information
  * @param data []byte - response data from cover server
  * @param num int - length of response data
- * @return []data - transformed response (sent to client)
+ * @return []data - transformed response (send to client)
  */
 func (c *Cover) xformResp (s *State, data []byte, num int) []byte {
 
 	// log incoming packet
 	logger.Printf (logger.DBG_HIGH, "[cover] %d bytes received from cover server.\n", num)
+	logger.Println (logger.DBG_ALL, "[cover] Incoming data:\n" + string(data[0:num]))
 
 	// setup reader and response
+	size := num
 	rdr := bytes.NewBuffer (data[0:num])
 	resp := ""
 	
 	// initial response package
-	if !s.respCont {
+	if s.respMode == 0 {
 		// start of new response encountered: parse header fields
 		hdr: for {
 			// get next line (terminated by line break)
@@ -345,6 +361,19 @@ func (c *Cover) xformResp (s *State, data []byte, num int) []byte {
 					logger.Println (logger.DBG_ALL, "[cover] Incoming response header:\n" + resp)
 					// drop length encoding on gzip content
 					break hdr
+
+				//-----------------------------------------------------
+				// Status line
+				//-----------------------------------------------------
+				case strings.HasPrefix (line, "HTTP/"):
+					// split line into parts
+					parts := strings.Split (line, " ")
+					status,_ := strconv.Atoi (parts[1])
+					logger.Printf (logger.DBG, "[cover] response status: %d\n", status)
+					if status != 200 {
+						// pass back anything that is not OK
+						return data[0:size]
+					}
 			
 				//-----------------------------------------------------
 				// Content-Type:
@@ -354,14 +383,6 @@ func (c *Cover) xformResp (s *State, data []byte, num int) []byte {
 					parts := strings.Split (line, " ")
 					s.respType = strings.TrimRight (parts[1], ";")
 					logger.Println (logger.DBG_HIGH, "[cover] response type: " + s.respType)
-					
-					// set response representation
-					s.respBinary = false
-					switch {
-						case strings.HasPrefix (s.respType, "img"):
-							s.respBinary = true
-					}
-					logger.Printf (logger.DBG_HIGH, "[cover] response is binary? %v\n",s.respBinary)
 
 				//-----------------------------------------------------
 				// Content-Encoding:
@@ -397,46 +418,96 @@ func (c *Cover) xformResp (s *State, data []byte, num int) []byte {
 	}
 
 	// are we still in the initial response packet?	
-	if !s.respCont {
+	if s.respMode == 0 {
 		//-------------------------------------------------------------
 		// (initial) HTML response		
 		//-------------------------------------------------------------		
 		if strings.HasPrefix (s.respType, "text/html") {
 			// start of a new HTML response. Use pre-defined HTM page
 			// to initialize response.
-			s.respPending = htmlIntro + c.getReplacementBody (s.reqRessource)
+			s.respPending = c.getReplacementBody (s.reqResource)
+			// emit HTML introduction sequence
+			resp += htmlIntro
+			num -= len(htmlIntro)
 		}
-		// we are now in continuation mode.
-		s.respCont = true
+		// switch to next mode
+		s.respMode = 1
 	}
 
-	//-------------------------------------------------------------
-	// assmble HTML response		
-	//-------------------------------------------------------------		
-	if strings.HasPrefix (s.respType, "text/html") {
-		// do content translation (collect ressource tags)
-		parseHTML (crdr, s.respTags)
-		resp += c.assembleHTML (s, num)
-		logger.Println (logger.DBG_ALL, "[cover] Translated response:\n" + resp)
-		// return response data
-		return []byte(resp)
+	switch {
+		//-------------------------------------------------------------
+		// assmble HTML response		
+		//-------------------------------------------------------------		
+		case strings.HasPrefix (s.respType, "text/html"):
+			// do content translation (collect resource tags)
+			done := parseHTML (crdr, s.respHdr, s.respTags)
+			// assemble header if required
+			if s.respMode == 1 && s.respHdr.Count() > 0 {
+				hdr := c.assembleHeader (s.respHdr, num)
+				resp += hdr
+				num -= len(hdr)
+				// handle HTML body
+				s.respMode = 2
+			}
+			// assemble HTML body
+			resp += c.assembleBody (s, num, done)
+			logger.Println (logger.DBG_ALL, "[cover] Translated response:\n" + resp)
+			// return response data
+			return []byte(resp)
+			
+		//-------------------------------------------------------------
+		// Images: Images are considered harmless, so we simply
+		// pass them back to the client.
+		//-------------------------------------------------------------		
+		case strings.HasPrefix (s.respType, "image/"):
+			logger.Println (logger.DBG, "[cover] Image data passed to client")
+			return data[0:size]
+			
+		//-------------------------------------------------------------
+		// JavaScript: Simply replace any JavaScript content with
+		// spaces (looks like the client browser has disabled
+		// JavaScript).
+		//-------------------------------------------------------------		
+		case strings.HasPrefix (s.respType, "application/x-javascript"):
+			// padding to requested size
+			for n := 0; n < num; n++ {
+				resp += " " 
+			}
+			// return response data
+			logger.Println (logger.DBG, "[cover] JavaScript scrubbed")
+			return []byte(resp)
+			
+		//-------------------------------------------------------------
+		// CSS: Simply replace any style sheets with spaces. No image
+		// references in CSS are parsed (looks like those are cached
+		// resources to an eavesdropper)
+		//-------------------------------------------------------------		
+		case strings.HasPrefix (s.respType, "text/css"):
+			// padding to requested size
+			for n := 0; n < num; n++ {
+				resp += " " 
+			}
+			// return response data
+			logger.Println (logger.DBG, "[cover] CSS scrubbed")
+			return []byte(resp)
 	}
 	
 	//return untranslated response
 	logger.Println (logger.ERROR, "[cover] Unhandled response!")
-	return data		
+	return data[0:size]		
 }
 
 //=====================================================================
 /*
- * Assemble a response from the current state (like response header),
+ * Assemble a HTML body from the current state (like response header),
  * the resource list and a replacement body (addressed by the requested
- * ressource path from state).
+ * resource path from state).
  * @param s *state - current state info
  * @param size int - target size of response
- * @return []byte - assembled response
+ * @param done bool - can we close the HTML
+ * @return string - assembled HTML body
  */
-func (c *Cover) assembleHTML (s *State, size int) string {
+func (c *Cover) assembleBody (s *State, size int, done bool) string {
 
 	// emit pending reponse data first
 	resp := ""
@@ -452,7 +523,7 @@ func (c *Cover) assembleHTML (s *State, size int) string {
 			s.respPending = ""
 	}
 	
-	// add ressources (if any are pending)
+	// add resources (if any are pending)
 	for s.respTags.Count() > 0 {
 		// get next tag
 		tag := s.respTags.Get()
@@ -472,24 +543,54 @@ func (c *Cover) assembleHTML (s *State, size int) string {
 			break
 		}
 	}
-				
-	if !s.respHtmlDone {
-		// close HTML if space allows
-		if len(htmlOutro) < size {
-			resp += htmlOutro
-			size -= len(htmlOutro)
-			resp += padding (size)
-			s.respHtmlDone = true
-		} else {
-			resp += padding (size)
-			s.respHtmlDone = false
-		}
-	} else {
-		// we are done, but have still response data to transfer. Fill up
-		// with padding sequence. 
-		resp += padding (size)
+	
+	// close HTML if possible
+	if done {
+		resp += htmlOutro
+		size -= len(htmlOutro)
 	}
+	// we are done, but have still response data to transfer. Fill up
+	// with padding sequence. 
+	resp += padding (size)
+
 	return resp
+}
+
+//=====================================================================
+/*
+ * Assemble a HTML header from the current state if there are header
+ * links we need to reproduce.
+ * @param tags *TagList - header tags
+ * @param size int - max size of response
+ * @return string - assembled header
+ */
+func (c *Cover) assembleHeader (tags *TagList, size int) string {
+
+	// add header resources
+	hdr := "<head>\n"
+	for tags.Count() > 0 {
+		// get next tag
+		tag := tags.Get()
+		if tag == nil {
+			break
+		}
+		// translate tag for client
+		inl := c.translateTag (tag) + "\n"
+		// check if we can add the tag?
+		if len(inl) < size {
+			// yes: add it to response
+			hdr += inl
+			size -= len(inl)
+		} else {
+			// no: put it back
+			logger.Printf (logger.WARN, "[cover] can't add all header tags: %d are skipped\n", tags.Count()+1) 
+			break
+		}
+	}
+	
+	// close header
+	hdr += "</head>\n"
+	return hdr
 }
 
 //---------------------------------------------------------------------
@@ -497,7 +598,7 @@ func (c *Cover) assembleHTML (s *State, size int) string {
  * Get HTML replacement page: Return defined replacement page. If no
  * replacement is defined, return an error page. If the replacement
  * is tagged "[Upload]", generate a upload form
- * @param res string - name of the HTML ressource
+ * @param res string - name of the HTML resource
  * @return string - HTML body content
  */
 func (c *Cover) getReplacementBody (res string) string {
@@ -506,6 +607,7 @@ func (c *Cover) getReplacementBody (res string) string {
 	page,ok := c.htmls[res]
 	// return error page if no replacement is defined.
 	if !ok {
+		logger.Println (logger.WARN, "[cover] Unknown HTML resource requested: " + res)
 		return "<h1>Unsupported page. Please return to previous page!</h1>"
 	}
 	// return normal pages
@@ -528,17 +630,18 @@ func (c *Cover) getReplacementBody (res string) string {
  */
 func (c *Cover) translateTag (tag *Tag) string {
 
-	// translate "src" attribute of tag
 	if src,ok := tag.attrs["src"]; ok {
-		if pos := strings.Index (src, "://"); pos != -1 {
-			// we have an absolute URI that needs translation
-			logger.Printf (logger.INFO, "[cover] URI translation of '%s'\n", src)
-			scheme := string(src[0:pos])
-			res := string(src[pos+2:])
-			tag.attrs["src"] = "/&" + scheme + res
-		}
+		// translate "src" attribute of tag
+		trgt := translateURI (src)
+		logger.Printf (logger.INFO, "[cover] URI translation of '%s' => '%s'\n", src, trgt)
+		tag.attrs["src"] = trgt
+	} else if src,ok := tag.attrs["href"]; ok {
+		// translate "href" attribute of tag
+		trgt := translateURI (src)
+		logger.Printf (logger.INFO, "[cover] URI translation of '%s' => '%s'\n", src, trgt)
+		tag.attrs["href"] = trgt
 	} else {
-		// failed to access "src" attribute?!
+		// failed to access reference attribute?!
 		s := tag.String()
 		logger.Println (logger.ERROR, "[cover] Tag translation failed: " + s)
 		return s
