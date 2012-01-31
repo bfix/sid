@@ -27,10 +27,7 @@ import (
 	"strings"
 	"strconv"
 	"bytes"
-	"os"
-	"io"
 	"bufio"
-	"compress/gzip"
 	"gospel/logger"
 )
 
@@ -43,11 +40,9 @@ import (
  *      2: normal HTML body is being processed
  */
 type State struct {
-	reqBalance		int			// size balance for request translation
-	reqResource		string		// resource requested
+	reqResource		string		// resource requested by client
 	respPending		string		// pending (HTML) response
 	respEnc			string		// response encoding
-	respBalance		int			// size balance for response translation
 	respMode		int			// response mode (0=init,1=hdr,2=body)
 	respSize		int			// expected response size (total length)
 	respType		string		// format identifier for response content (mime type)
@@ -96,11 +91,9 @@ func (c *Cover) connect () net.Conn {
 	// allocate state information and add to state list
 	// initialize struct with default data
 	c.states[conn] = &State {
-		reqBalance:		0,
 		reqResource:	"",
 		respPending:	"",
 		respEnc:		"",
-		respBalance:	0,
 		respMode:		0,
 		respSize:		0,
 		respType:		"text/html",
@@ -158,7 +151,13 @@ func (c *Cover) xformReq (s *State, data []byte, num int) []byte {
 	//hasTransferEncoding := false	// expected transfer encoding defined?
 	mime := "text/html"				// expected content type
 	targetHost := c.server			// request resource from this host (default)
+	balance := 0					// balance between incoming and outgoing information
 	
+	// use identical line break sequence	
+	lb := "\r\n"
+	if strings.Index (inStr, lb) == -1 {
+		lb = "\n"
+	}
 	for {
 		// get next line (terminated by line break)
 		b,broken,_ := rdr.ReadLine()
@@ -206,9 +205,9 @@ func (c *Cover) xformReq (s *State, data []byte, num int) []byte {
 
 				// assemble new resource request
 				s.reqResource = uri
-				req += "GET " + uri + " HTTP/1.0\n"
+				req += "GET " + uri + " HTTP/1.0" + lb
 				// keep balance
-				s.reqBalance += (len(parts[1]) - len(uri))
+				balance += (len(parts[1]) - len(uri))
 			
 			//---------------------------------------------------------
 			// Host reference: change to hostname of cover server
@@ -222,9 +221,9 @@ func (c *Cover) xformReq (s *State, data []byte, num int) []byte {
 				parts := strings.Split (line, " ")
 				// replace hostname reference 
 				logger.Printf (logger.DBG_HIGH, "[cover] Host replaced with '%s'\n", c.server)
-				req += "Host: " + targetHost + "\n"
+				req += "Host: " + targetHost + lb
 				// keep track of balance
-				s.reqBalance += (len(parts[1]) - len(targetHost))
+				balance += (len(parts[1]) - len(targetHost))
 				
 			//---------------------------------------------------------
 			// try to get balance straight on language header line:
@@ -243,10 +242,10 @@ func (c *Cover) xformReq (s *State, data []byte, num int) []byte {
 				if mime == "text/html" && parts[1] != "identity" {
 					// change to identity encoding for HTML pages
 					repl := "Accept-Encoding: identity"
-					s.reqBalance += len(repl) - len(line)
-					req += repl + "\n"
+					balance += len(repl) - len(line)
+					req += repl + lb
 				} else {
-					req += line + "\n"
+					req += line + lb
 				}
 /*
 			//---------------------------------------------------------
@@ -259,10 +258,10 @@ func (c *Cover) xformReq (s *State, data []byte, num int) []byte {
 				if mime == "text/html" && parts[1] != "identity" {
 					// change to identity transfer for HTML pages
 					repl := "Transfer-Encoding: identity"
-					s.reqBalance += len(repl) - len(line)
-					req += repl + "\n"
+					balance += len(repl) - len(line)
+					req += repl + lb
 				} else {
-					req += line + "\n"
+					req += line + lb
 				}
 */
 			//---------------------------------------------------------
@@ -279,7 +278,7 @@ func (c *Cover) xformReq (s *State, data []byte, num int) []byte {
 			default:
 				req += line
 				if !broken {
-					req += "\n"
+					req += lb
 				}
 		}
 	}
@@ -289,24 +288,32 @@ func (c *Cover) xformReq (s *State, data []byte, num int) []byte {
 			if !hasContentEncoding {
 				// enforce identity encoding for HTML pages
 				repl := "Accept-Encoding: identity"
-				s.reqBalance += len(repl)
-				req += repl + "\n"
+				balance += len(repl)
+				req += repl + lb
 			}
 /*
 			if !hasTransferEncoding {
 				// enforce identity transfer for HTML pages
 				repl := "Transfer-Encoding: identity"
-				s.reqBalance += len(repl)
-				req += repl + "\n"
+				balance += len(repl)
+				req += repl + lb
 			}
 */
 		}	
 		// add delimiting empty line
-		req += "\n"
-		if s.reqBalance != 0 {
-			logger.Printf (logger.WARN, "[cover] Unbalanced request: %d bytes diff\n", s.reqBalance)
+		req += lb
+		if balance != 0 {
+			logger.Printf (logger.WARN, "[cover] Unbalanced request: %d bytes diff\n", balance)
 		}
 		logger.Printf (logger.DBG_ALL, "[cover] Transformed request:\n" + req + "\n")
+	}
+	// padding of request with line breaks (if assembled request is smaller)
+	for num > len(req) {
+		req += "\n"
+	}
+	// return transformed request
+	if num != len(req) {
+		logger.Printf (logger.WARN, "[cover] DIFF(request) = %d\n", len(req)-num)
 	}
 	return []byte(req)
 }
@@ -323,8 +330,9 @@ func (c *Cover) xformReq (s *State, data []byte, num int) []byte {
 func (c *Cover) xformResp (s *State, data []byte, num int) []byte {
 
 	// log incoming packet
+	inStr := string(data[0:num])
 	logger.Printf (logger.DBG_HIGH, "[cover] %d bytes received from cover server.\n", num)
-	logger.Println (logger.DBG_ALL, "[cover] Incoming data:\n" + string(data[0:num]))
+	logger.Println (logger.DBG_ALL, "[cover] Incoming data:\n" + inStr)
 
 	// setup reader and response
 	size := num
@@ -333,6 +341,12 @@ func (c *Cover) xformResp (s *State, data []byte, num int) []byte {
 	
 	// initial response package
 	if s.respMode == 0 {
+	
+		// use identical line break sequence	
+		lb := "\r\n"
+		if strings.Index (inStr, lb) == -1 {
+			lb = "\n"
+		}
 		// start of new response encountered: parse header fields
 		hdr: for {
 			// get next line (terminated by line break)
@@ -342,7 +356,9 @@ func (c *Cover) xformResp (s *State, data []byte, num int) []byte {
 				// header is not complete: wait for next response fragment
 				logger.Println (logger.WARN, "[cover] Response header fragmented!")
 				logger.Println (logger.DBG, "[cover] Assembled response:\n" + resp)
-				resp += "\n\n"
+				if size != len(resp) {
+					logger.Printf (logger.WARN, "[cover] DIFF(response:1) = %d\n", len(resp)-size)
+				}
 				return []byte(resp)
 			}
 			// check if header is available at all..
@@ -394,27 +410,12 @@ func (c *Cover) xformResp (s *State, data []byte, num int) []byte {
 					logger.Println (logger.DBG_HIGH, "[cover] response encoding: " + s.respEnc)
 			}
 			// assemble response
-			resp += line + "\n"
+			resp += line + lb
 		}
 		// add delimiter line
-		resp += "\n"
+		resp += lb
 		// adjust remaining content size
 		num -= len(resp)
-	}
-
-	// continue response handling: create content reader based on encoding
-	var crdr io.Reader = rdr
-	switch s.respEnc {
-		// zip'd content
-		case "gzip": {
-			rdr.ReadString ('\n')
-			var err os.Error
-			crdr,err = gzip.NewReader (rdr)
-			if err != nil {
-				logger.Println (logger.ERROR, "[cover] Failed to create zip'd reader!")
-				return []byte(resp)
-			}
-		}
 	}
 
 	// are we still in the initial response packet?	
@@ -440,7 +441,7 @@ func (c *Cover) xformResp (s *State, data []byte, num int) []byte {
 		//-------------------------------------------------------------		
 		case strings.HasPrefix (s.respType, "text/html"):
 			// do content translation (collect resource tags)
-			done := parseHTML (crdr, s.respHdr, s.respTags)
+			done := parseHTML (rdr, s.respHdr, s.respTags)
 			// assemble header if required
 			if s.respMode == 1 && s.respHdr.Count() > 0 {
 				hdr := c.assembleHeader (s.respHdr, num)
@@ -453,6 +454,9 @@ func (c *Cover) xformResp (s *State, data []byte, num int) []byte {
 			resp += c.assembleBody (s, num, done)
 			logger.Println (logger.DBG_ALL, "[cover] Translated response:\n" + resp)
 			// return response data
+			if size != len(resp) {
+				logger.Printf (logger.WARN, "[cover] DIFF(response:2) = %d\n", len(resp)-size)
+			}
 			return []byte(resp)
 			
 		//-------------------------------------------------------------
@@ -475,6 +479,9 @@ func (c *Cover) xformResp (s *State, data []byte, num int) []byte {
 			}
 			// return response data
 			logger.Println (logger.DBG, "[cover] JavaScript scrubbed")
+			if size != len(resp) {
+				logger.Printf (logger.WARN, "[cover] DIFF(response:3) = %d\n", len(resp)-size)
+			}
 			return []byte(resp)
 			
 		//-------------------------------------------------------------
@@ -489,6 +496,9 @@ func (c *Cover) xformResp (s *State, data []byte, num int) []byte {
 			}
 			// return response data
 			logger.Println (logger.DBG, "[cover] CSS scrubbed")
+			if size != len(resp) {
+				logger.Printf (logger.WARN, "[cover] DIFF(response:4) = %d\n", len(resp)-size)
+			}
 			return []byte(resp)
 	}
 	
