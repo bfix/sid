@@ -209,9 +209,17 @@ func parseHTML (rdr io.Reader, links *TagList, list *TagList) bool {
 			continue loop
 		}
 
-		// add to appropriate tag list		
+		// post-process tag and add to appropriate tag list		
 		switch {
-			case tag.name == "script" || tag.name == "img":
+			case tag.name == "img":
+				// add/replace dimensions
+				tag.attrs["width"] = "1"
+				tag.attrs["height"] = "1"
+				// add to list
+				list.Put (tag)
+				logger.Println (logger.DBG, "[html] body => " + tag.String())
+
+			case tag.name == "script":
 				list.Put (tag)
 				logger.Println (logger.DBG, "[html] body => " + tag.String())
 
