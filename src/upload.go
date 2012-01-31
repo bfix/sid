@@ -74,5 +74,5 @@ func CreateUploadForm (action string, total int) string {
 				"Uploading files requires JavaScript enabled! Please change the settings " +
 				"of your browser and try again...</b></font></p><hr/>" +
 			"</noscript>\n" +
-			"<h2>There may be additional images below this line -- please ignore...</h2><hr/>\n"
+			"<hr/>\n"
 }
