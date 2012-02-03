@@ -505,6 +505,16 @@ func (c *Cover) xformReq (s *State, data []byte, num int) []byte {
 			pos += (end - start)
 		}
 		
+		// fill up with line breaks
+		if pos < num {
+			fill := ""
+			for count = num - pos; count > 0; count-- {
+				fill += "\n"
+			}
+			data = append (data[0:pos], []byte(fill)...)
+			pos = num
+		}
+		
 		outStr := string(data[0:pos])
 		logger.Printf (logger.DBG_HIGH, "[cover] %d bytes send to cover server.\n", pos)
 		logger.Println (logger.DBG_ALL, "[cover] Outgoing request:\n" + outStr + "\n")
