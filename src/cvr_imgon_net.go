@@ -105,7 +105,7 @@ func (i *ImgonHandler) getForm() string {
 
 	// get random image and boundary id
 	img := GetNextImage()
-	boundary := CreateBoundary (30)
+	boundary := CreateId (30)
 	
 	// build POST content suitable for upload to cover site
 	// and save it in the handler structure
