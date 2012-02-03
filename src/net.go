@@ -32,8 +32,8 @@ import (
 // Constants
 
 const (
-	delay = 100000
-	retries = 1000
+	delay	= 1000000		// 1ms
+	retries =    1000		// max. 1s
 )
 
 ///////////////////////////////////////////////////////////////////////
@@ -56,12 +56,12 @@ func sendData (conn net.Conn, data []byte, srv string) bool {
 	for count > 0 {
 		// get (next) chunk to be send
 		chunk := data [start:start+count] 
-		if num,err := conn.Write (chunk); err == nil {
+		if num,err := conn.Write (chunk); num > 0 {
 			// advance slice on partial write
 			start += num
 			count -= num
 			retry = 0
-		} else {
+		} else if err != nil {
 			// handle error condition
 			switch err.(type) {
 				case net.Error:
