@@ -32,15 +32,46 @@ import (
 )
 
 ///////////////////////////////////////////////////////////////////////
+// Constants
+
+const (
+	//-----------------------------------------------------------------
+	// Request modes
+	//-----------------------------------------------------------------
+	REQ_UNKNOWN = iota	// unknown request type
+	REQ_GET				// "get resource" request
+	REQ_POST			// "post data" request
+	
+	//-----------------------------------------------------------------
+	// Request parser states
+	//-----------------------------------------------------------------
+	RS_HDR = iota		// parsing header (initial state)
+	RS_HDR_COMPLETE		// parsing header completed
+	RS_CONTENT			// parsing content (POST request)
+	RS_DONE				// parsing complete
+)
+
+///////////////////////////////////////////////////////////////////////
 /*
  * State information for cover server connections.
- * -respMode: a mode indicator for handling HTML responses
- *      0: no HTML has been send; the "htmlIntro" sequence will be sent first
- *      1: header data will be sent
- *      2: normal HTML body is being processed
  */
 type State struct {
+	//-----------------------------------------------------------------
+	// Request state
+	//-----------------------------------------------------------------
+	reqMode			int			// request type (GET, POST)
+	reqState		int			// request processing (HDR,APPEND)
 	reqResource		string		// resource requested by client
+	reqBoundaryIn	string		// POST boundary separator (incoming,client)
+	reqBoundaryOut	string		// POST boundary separator (outgoing,cover)
+	reqCoverPost	[]byte		// cover POST content
+	reqCoverPostPos	int			// index into POST content
+	reqUpload		bool		// parsing client document upload?
+	reqUploadData	string		// client document data
+	
+	//-----------------------------------------------------------------
+	// Response state
+	//-----------------------------------------------------------------
 	respPending		string		// pending (HTML) response
 	respEnc			string		// response encoding
 	respMode		int			// response mode (0=init,1=hdr,2=body)
@@ -91,15 +122,30 @@ func (c *Cover) connect () net.Conn {
 	// allocate state information and add to state list
 	// initialize struct with default data
 	c.states[conn] = &State {
-		reqResource:	"",
-		respPending:	"",
-		respEnc:		"",
-		respMode:		0,
-		respSize:		0,
-		respType:		"text/html",
-		respHdr:		NewTagList(),
-		respTags:		NewTagList(),
-	} 
+		//-------------------------------------------------------------
+		// Request state
+		//-------------------------------------------------------------
+		reqMode:			REQ_UNKNOWN,
+		reqState:			RS_HDR,
+		reqResource:		"",
+		reqBoundaryIn:		"",
+		reqBoundaryOut:		"",
+		reqCoverPost:		nil,
+		reqCoverPostPos:	0,
+		reqUpload:			false,
+		reqUploadData:		"",
+		
+		//-------------------------------------------------------------
+		// Response state
+		//-------------------------------------------------------------
+		respPending:		"",
+		respEnc:			"",
+		respMode:			0,
+		respSize:			0,
+		respType:			"text/html",
+		respHdr:			NewTagList(),
+		respTags:			NewTagList(),
+	}
 	return conn
 }
 
@@ -140,13 +186,12 @@ func (c *Cover) GetState (conn net.Conn) *State {
 func (c *Cover) xformReq (s *State, data []byte, num int) []byte {
 
 	inStr := string(data[0:num])
-	logger.Printf (logger.DBG_HIGH, "[http] %d bytes received from cover server.\n", num)
-	logger.Println (logger.DBG_ALL, "[http] Incoming response:\n" + inStr + "\n")
+	logger.Printf (logger.DBG_HIGH, "[cover] %d bytes received from client.\n", num)
+	logger.Println (logger.DBG_ALL, "[cover] Incoming request:\n" + inStr + "\n")
 
 	// assemble transformed request
 	rdr := bufio.NewReader (strings.NewReader (inStr))
 	req := ""
-	complete := false				// parsing done?
 	hasContentEncoding := false		// expected content encoding defined?
 	//hasTransferEncoding := false	// expected transfer encoding defined?
 	mime := "text/html"				// expected content type
@@ -158,17 +203,64 @@ func (c *Cover) xformReq (s *State, data []byte, num int) []byte {
 	if strings.Index (inStr, lb) == -1 {
 		lb = "\n"
 	}
-	for {
+	for s.reqState == RS_HDR {
 		// get next line (terminated by line break)
 		b,broken,_ := rdr.ReadLine()
 		if b == nil || len(b) == 0 {
-			complete = !broken
+			if !broken {
+				s.reqState = RS_HDR_COMPLETE
+			}
 			break
 		}
-		line := string(b)
+		line := strings.TrimRight (string(b), "\r\n")
 		
 		// transform request data
 		switch {
+			//---------------------------------------------------------
+			// POST command: upload document
+			// This command triggers the upload of a document to SID
+			// that is covered by an upload to the cover site of the
+			// same length.
+			//---------------------------------------------------------
+			case strings.HasPrefix (line, "POST "):
+				// split line into parts
+				parts := strings.Split (line, " ")
+				logger.Printf (logger.DBG_HIGH, "[cover] POST '%s'\n", parts[1])
+				
+				// POST uri encodes the key to the cover POST content
+				pos := strings.LastIndex (parts[1], "/")
+				s.reqBoundaryOut = parts[1][pos+1:]
+				uri := parts[1][0:pos]
+				s.reqCoverPost = c.hdlr.getPostContent (s.reqBoundaryOut)
+				s.reqCoverPostPos = 0
+				
+				// perform translation (if required)
+				uri = translateURI (uri)
+				logger.Printf (logger.INFO, "[cover] URI translation: '%s' => '%s'\n", parts[1], uri)
+				
+				// if URI refers to an external host, split into
+				// host reference and resource specification
+				if pos := strings.Index (uri, "://"); pos != -1 {
+					pos = strings.Index (string(uri[pos+3:]), "/")
+					if pos != -1 {
+						targetHost = uri[0:pos]
+						uri = uri[pos:]
+						logger.Printf (logger.INFO, "[cover] URI split: '%s', '%s'\n", targetHost, uri)
+					} else { 
+						logger.Printf (logger.WARN, "[cover] URI split failed on '%s'\n", uri)
+					}
+				} else {
+					targetHost = c.server
+				}  
+
+				// assemble new POST request
+				s.reqResource = uri
+				req += "POST " + uri + " HTTP/1.0" + lb
+				s.reqMode = REQ_POST
+				
+				// keep balance
+				balance += (len(parts[1]) - len(uri))
+			
 			//---------------------------------------------------------
 			// GET command: request resource
 			// If the requested resource identifier is a translated
@@ -206,6 +298,8 @@ func (c *Cover) xformReq (s *State, data []byte, num int) []byte {
 				// assemble new resource request
 				s.reqResource = uri
 				req += "GET " + uri + " HTTP/1.0" + lb
+				s.reqMode = REQ_GET
+
 				// keep balance
 				balance += (len(parts[1]) - len(uri))
 			
@@ -220,7 +314,7 @@ func (c *Cover) xformReq (s *State, data []byte, num int) []byte {
 				// split line into parts
 				parts := strings.Split (line, " ")
 				// replace hostname reference 
-				logger.Printf (logger.DBG_HIGH, "[cover] Host replaced with '%s'\n", c.server)
+				logger.Printf (logger.DBG_HIGH, "[cover] Host replaced with '%s'\n", targetHost)
 				req += "Host: " + targetHost + lb
 				// keep track of balance
 				balance += (len(parts[1]) - len(targetHost))
@@ -271,6 +365,52 @@ func (c *Cover) xformReq (s *State, data []byte, num int) []byte {
 				// split line into parts
 				parts := strings.Split (line, " ")
 				mime = parts[1]
+				// remember boundary definition
+				if s.reqMode == REQ_POST {
+					// strip "boundary="
+					s.reqBoundaryIn = string(parts[2][9:]) 														
+					logger.Println (logger.DBG_HIGH, "[cover] Boundary=" + s.reqBoundaryIn)
+					repl := parts[0] + " " + mime +
+						  " boundary=-----------------------------" + s.reqBoundaryOut
+					balance += len(repl) - len(line)
+					req += repl + lb
+				} else {
+					req += line + lb
+				}
+
+			//---------------------------------------------------------
+			// Referer
+			//---------------------------------------------------------
+			case strings.HasPrefix (line, "Referer: "):
+				// don't add spec
+
+			//---------------------------------------------------------
+			// Connection
+			//---------------------------------------------------------
+			case strings.HasPrefix (line, "Connection: "):
+				// split line into parts
+				parts := strings.Split (line, " ")
+				if parts[1] != "close" {
+					repl := "Connection: close"
+					balance += len(repl) - len(line)
+					req += repl + lb
+				} else {
+					req += line + lb
+				}
+
+			//---------------------------------------------------------
+			// Keep-Alive:
+			//---------------------------------------------------------
+			case strings.HasPrefix (line, "Keep-Alive: "):
+				// don't add spec
+
+			//---------------------------------------------------------
+			// Content-Length
+			//---------------------------------------------------------
+			case strings.HasPrefix (line, "Content-Length: "):
+				repl := "Content-Length: " + strconv.Itoa (len(s.reqCoverPost))
+				balance += len(repl) - len(line)
+				req += repl + lb
 
 			//---------------------------------------------------------
 			// add unchanged request lines. 
@@ -282,8 +422,13 @@ func (c *Cover) xformReq (s *State, data []byte, num int) []byte {
 				}
 		}
 	}
-	// check if the request processing has completed
-	if complete {
+	
+	// check for completed header in this pass
+	if s.reqState == RS_HDR_COMPLETE {
+		// add delimiting empty line
+		req += lb
+		
+		// post-process header
 		if mime == "text/html" {
 			if !hasContentEncoding {
 				// enforce identity encoding for HTML pages
@@ -299,22 +444,89 @@ func (c *Cover) xformReq (s *State, data []byte, num int) []byte {
 				req += repl + lb
 			}
 */
-		}	
-		// add delimiting empty line
-		req += lb
+		}
+
+		if s.reqMode == REQ_POST {
+			// switch state			
+			s.reqState = RS_CONTENT
+		} else {
+			// we are done
+			s.reqState = RS_DONE
+		}
+	}
+	
+	// handle processing of request contents for POST requests
+	if s.reqState == RS_CONTENT {
+	
+		// parse data until end of request
+		for {
+			// get next line (terminated by line break)
+			// and adjust number of bytes read
+			b,_,err := rdr.ReadLine()
+			if err != nil {
+				break
+			}
+			line := strings.TrimRight (string(b), "\r\n")
+
+			//logger.Println (logger.DBG_ALL, "[cover] POST content: " + line + "\n")
+			
+			if !s.reqUpload {
+				// check for start of document
+				if strings.Index (line, "name=\"file\";") != -1 {
+					s.reqUpload = true
+					s.reqUploadData = ""
+				}
+			} else {
+				if strings.Index (line, s.reqBoundaryIn) != -1 {
+					s.reqUpload = false
+					PostprocessUploadData (s.reqUploadData)
+				}
+				// we are uploading client data
+				s.reqUploadData += line + lb
+			}
+		}
+		
+		// build new request data
+		binReq := []byte(req)
+		copy (data, binReq)
+		pos := len(binReq)
+		count := num - pos
+	
+		// we have "count" bytes of response data to sent out
+		start := s.reqCoverPostPos
+		total := len(s.reqCoverPost)
+		if start <  total {
+			end := start + count
+			s.reqCoverPostPos = end
+			if end > total {
+				end = total
+			}
+			copy (data[pos:], s.reqCoverPost [start:end])
+			pos += (end - start)
+		}
+		
+		outStr := string(data[0:pos])
+		logger.Printf (logger.DBG_HIGH, "[cover] %d bytes send to cover server.\n", pos)
+		logger.Println (logger.DBG_ALL, "[cover] Outgoing request:\n" + outStr + "\n")
+		return data[0:pos]
+	}
+	
+	// check for completed request processing
+	if s.reqState == RS_DONE {
 		if balance != 0 {
 			logger.Printf (logger.WARN, "[cover] Unbalanced request: %d bytes diff\n", balance)
 		}
-		logger.Printf (logger.DBG_ALL, "[cover] Transformed request:\n" + req + "\n")
 	}
-	// padding of request with line breaks (if assembled request is smaller)
-	for num > len(req) {
+	
+	// padding of request with line breaks (if assembled request is smaller; GET only)
+	for num > len(req) && s.reqMode == REQ_GET {
 		req += "\n"
 	}
 	// return transformed request
 	if num != len(req) {
 		logger.Printf (logger.WARN, "[cover] DIFF(request) = %d\n", len(req)-num)
 	}
+	logger.Printf (logger.DBG_ALL, "[cover] Transformed request:\n" + req + "\n")
 	return []byte(req)
 }
 
@@ -332,7 +544,7 @@ func (c *Cover) xformResp (s *State, data []byte, num int) []byte {
 	// log incoming packet
 	inStr := string(data[0:num])
 	logger.Printf (logger.DBG_HIGH, "[cover] %d bytes received from cover server.\n", num)
-	logger.Println (logger.DBG_ALL, "[cover] Incoming data:\n" + inStr)
+	logger.Println (logger.DBG_ALL, "[cover] Incoming response:\n" + inStr + "\n")
 
 	// setup reader and response
 	size := num
@@ -609,7 +821,7 @@ func (c *Cover) assembleHeader (tags *TagList, size int) string {
  * replacement is defined, return an error page. If the replacement
  * is tagged "[Upload]", generate a upload form
  * @param res string - name of the HTML resource
- * @return string - HTML body content
+ * @return string - HTML body content (upload form)
  */
 func (c *Cover) getReplacementBody (res string) string {
 
