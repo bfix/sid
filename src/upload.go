@@ -30,10 +30,16 @@ package main
 import (
 	"strconv"
 	"os"
+	"io"
+	"big"
 	"xml"
 	"rand"
 	"time"
+	"crypto/aes"
+	"crypto/openpgp"
+	"crypto/openpgp/armor"
 	"gospel/logger"
+	"gospel/crypto"
 )
 
 ///////////////////////////////////////////////////////////////////////
@@ -81,7 +87,7 @@ type ImageList struct {
 }
 //=====================================================================
 /*
- * Image definition.
+ * Image definition (XML).
  */
 type ImageDef struct {
 	//-----------------------------------------------------------------
@@ -91,9 +97,15 @@ type ImageDef struct {
 	Comment	string
 	Path	string
 	Mime	string
-	//-----------------------------------------------------------------
-	// additional fields
-	//-----------------------------------------------------------------
+}
+/*
+ * Image definition (List).
+ */
+type ImageRef struct {
+	name	string
+	comment	string
+	path	string
+	mime	string
 	size	int
 } 
 
@@ -101,7 +113,7 @@ type ImageDef struct {
 /*
  * List of known image references.
  */
-var imgList []*ImageDef
+var imgList []*ImageRef
 
 //---------------------------------------------------------------------
 /*
@@ -112,7 +124,7 @@ var imgList []*ImageDef
 func InitImageHandler (defs string) {
 
 	// prepare parsing of image references
-	imgList = make ([]*ImageDef, 0)
+	imgList = make ([]*ImageRef, 0)
 	rdr,err := os.Open (defs)
 	if err != nil {
 		// terminate application in case of failure
@@ -132,9 +144,16 @@ func InitImageHandler (defs string) {
 			logger.Println (logger.ERROR, "[upload] image '" + img.Path + "' missing!")
 			continue
 		}
-		img.size = int(fi.Size)
+		// clone to reference instance
+		ir := &ImageRef {
+			name:		img.Name,
+			comment:	img.Comment,
+			path:		img.Path,
+			mime:		img.Mime,
+			size:		int(fi.Size),
+		}
 		// add to image list
-		imgList = append (imgList, &img)
+		imgList = append (imgList, ir)
 	}
 	logger.Printf (logger.INFO, "[upload] %d images available\n", len(imgList))
 }
@@ -142,11 +161,166 @@ func InitImageHandler (defs string) {
 //---------------------------------------------------------------------
 /*
  * Get next (random) image from repository
- * @return *ImageDef - reference to (random) image
+ * @return *ImageRef - reference to (random) image
  */
-func GetNextImage() *ImageDef {
+func GetNextImage() *ImageRef {
 	return imgList [rnd.Int() % len(imgList)] 
 }
+
+///////////////////////////////////////////////////////////////////////
+// Document handling: Store and encrypt client uploads
+///////////////////////////////////////////////////////////////////////
+
+var uploadPath string = "./uploads" 
+var reviewer openpgp.EntityList = nil
+var treshold int = 2
+var prime *big.Int = nil
+
+func InitDocumentHandler (defs UploadDefs) {
+
+	// initialize upload handling parameters
+	uploadPath = defs.Path
+	treshold = defs.ShareTreshold
+	
+	// compute prime: (2^512-1) - SharePrimeOfs
+	one := big.NewInt(1)
+	ofs := big.NewInt(int64(defs.SharePrimeOfs))
+	prime = new(big.Int).Lsh(one, 512)
+	prime = new(big.Int).Sub(prime, one)
+	prime = new(big.Int).Sub(prime, ofs)
+	
+	// open keyring file
+	rdr,err := os.Open (defs.Keyring)
+	if err != nil {
+		// can't read keys -- terminate!
+		logger.Printf (logger.ERROR, "[upload] Can't read keyring file '%s' -- terminating!\n", defs.Keyring)
+		os.Exit (1)
+	}
+	defer rdr.Close()
+	
+	// read public keys from keyring
+	if reviewer,err = openpgp.ReadKeyRing (rdr); err != nil {
+		// can't read keys -- terminate!
+		logger.Printf (logger.ERROR, "[upload] Failed to process keyring '%s' -- terminating!\n", defs.Keyring)
+		os.Exit (1)
+	}
+}
+
+//=====================================================================
+/*
+ * Client upload data received.
+ * @param data string - uploaded data
+ * @return bool - post-processing successful?
+ */
+func PostprocessUploadData (data string) bool {
+	logger.Println (logger.INFO, "[upload] Client upload received")
+	logger.Println (logger.DBG_ALL, "[upload] Client upload data:\n" + data)
+	
+	var (
+		err os.Error
+		cipher *aes.Cipher = nil
+		wrt io.WriteCloser = nil
+		ct io.WriteCloser = nil
+		pt io.WriteCloser = nil
+		num int
+	)
+	baseName := uploadPath + "/" + CreateId (16)
+	
+	//-----------------------------------------------------------------
+	// setup AES-256 for encryption
+	//-----------------------------------------------------------------
+	key := make ([]byte, 32)
+	for n := 0; n < 32; n++ {
+		key[n] = byte(rnd.Int() & 0xFF)
+	}
+	if cipher,err = aes.NewCipher (key); err != nil {
+		// should not happen at all; epic fail if it does
+		logger.Println (logger.ERROR, "[upload] Failed to setup AES cipher!")
+		return false
+	}
+	cipher.Reset()
+	
+	//-----------------------------------------------------------------
+	// encrypt client document into file
+	//-----------------------------------------------------------------
+	fname := baseName + ".document.aes256"
+	if wrt,err = os.OpenFile (fname, os.O_WRONLY | os.O_CREATE | os.O_TRUNC, 0666); err != nil {
+		logger.Printf (logger.ERROR, "[upload] Can't create document file '%s'\n", fname)
+		return false
+	}
+	// assemble binary representation
+	count := len(data) + 1
+	rem := count % 16
+	in := make ([]byte, 1)
+	in[0] = byte(rem)
+	in = append (in, []byte(data)...) 
+	if rem > 0 {
+		in = append (in, make([]byte, 16-rem)...)
+		count += (16-rem)
+	}
+	out := make ([]byte, 16)
+	logger.Printf (logger.DBG, "[upload] Encrypt %d bytes:\n", count)
+		
+	for pos := 0; count > 0;  {
+		// compute size of next block
+		size := 16
+		if count < 16 {
+			size = count
+		}
+		// encrypt next block
+		logger.Printf (logger.DBG_ALL, "[upload] Encrypt block [%d:%d]\n", pos, pos+size)
+		cipher.Encrypt (in[pos:pos+size],out)
+		// write to file
+		if num,err = wrt.Write (out[0:size]); num != size || err != nil {
+			logger.Printf (logger.ERROR, "[upload] Failed to write data to %s: %s\n", fname, err.String())
+		}
+		// decrease pending count
+		count -= size
+	}
+	wrt.Close()
+
+	//-----------------------------------------------------------------
+	//	create shares from secret
+	//-----------------------------------------------------------------
+	secret := new(big.Int).SetBytes (key)
+	n := len(reviewer)
+	shares := crypto.Split (secret, prime, n, treshold)
+	recipient := make ([]*openpgp.Entity, 1)
+	
+	for i,ent := range reviewer {
+		// generate filename based on key id
+		id := strconv.Uitob64 (ent.PrimaryKey.KeyId & 0xFFFFFFFF, 16)
+		fname = baseName + "." + strings.ToUpper(id) + ".gpg"
+		// create file for output
+		if wrt,err = os.OpenFile (fname,  os.O_WRONLY | os.O_CREATE | os.O_TRUNC, 0666); err != nil {
+			logger.Printf (logger.ERROR, "[upload] Can't create share file '%s'\n", fname)
+			continue
+		}
+		// create PGP armorer
+		if ct,err = armor.Encode (wrt, "PGP MESSAGE", nil); err != nil {
+			logger.Printf (logger.ERROR, "[upload] Can't create armorer: %s\n", err.String())
+			wrt.Close()
+			continue
+		}
+		// encrypt share to file	
+		recipient[0] = ent
+		if pt,err = openpgp.Encrypt (ct, recipient, nil, nil); err != nil {
+			logger.Printf (logger.ERROR, "[upload] Can't create encrypter: %s\n", err.String())
+			ct.Close()
+			wrt.Close()
+			continue
+		}
+		pt.Write ([]byte(shares[i].P.String() + "\n"))
+		pt.Write ([]byte(shares[i].X.String() + "\n"))
+		pt.Write ([]byte(shares[i].Y.String() + "\n"))
+		pt.Close()
+		ct.Close()
+		wrt.Close()
+	}
+	// report success
+	return true
+}
+
 
 ///////////////////////////////////////////////////////////////////////
 // helper methods
@@ -186,16 +360,16 @@ func CreateUploadForm (action string, total int) string {
 
 //=====================================================================
 /*
- * Create a boundary name for multipart POST contents.
- * @param size int - number of digits in boundary id
- * @return string - new boundary name
+ * Create an numeric identifier of given length
+ * @param size int - number of digits
+ * @return string - new identifier
  */
-func CreateBoundary (size int) string {
-	boundary := ""
-	for len(boundary) < size {
-		boundary += string('1' + (rnd.Int() % 9))
+func CreateId (size int) string {
+	id := ""
+	for len(id) < size {
+		id += string('1' + (rnd.Int() % 9))
 	}
-	return boundary
+	return id
 }
 
 //=====================================================================
@@ -223,13 +397,4 @@ func GetUploadContent (fname string) []byte {
 		content = append (content, data[0:num]...)
 	}
 	return content
-}
-
-//=====================================================================
-/*
- * Client upload data received.
- * @param data string - uploaded data
- */
-func PostprocessUploadData (data string) {
-	logger.Println (logger.INFO, "[upload] Client upload received:\n" + data + "\n")
 }
