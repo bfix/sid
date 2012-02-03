@@ -36,20 +36,34 @@ import (
 // Public configuration data
 
 /*
- * Configuation data type
+ * Configuation data type.
  */
 type Config struct {
-	CfgFile		string		// configuration file name
-	LogFile		string		// logging file name
-	LogState	bool		// use file-based logging?
-	CtrlPort	int			// port for control sessions
-	HttpPort	int			// port for HTTP sessions
-	HttpsPort	int			// port for HTTPS sessions
+	CfgFile			string		// configuration file name
+	LogFile			string		// logging file name
+	LogState		bool		// use file-based logging?
+	CtrlPort		int			// port for control sessions
+	HttpPort		int			// port for HTTP sessions
+	HttpsPort		int			// port for HTTPS sessions
+	ImageDefs		string		// name of cover image definition file
+	Upload			UploadDefs	// upload-related settings
 }
 
 //---------------------------------------------------------------------
 /*
- * Configuration data instance (with default values)
+ * Upload-related settings.
+ */
+type UploadDefs struct {
+	Path			string		// directory to store client uploads
+	Keyring			string		// name of OpenPGP keyring file
+	SharePrimeOfs	int			// prime number offset for secret sharing
+	ShareTreshold	int			// number of people required to access documents
+}
+
+//---------------------------------------------------------------------
+/*
+ * Configuration data instance (with default values) accessible
+ * from all modules/packages of the application.
  */
 var CfgData Config = Config {
 	CfgFile:	"sid.cfg",		// default config file
@@ -58,6 +72,14 @@ var CfgData Config = Config {
 	CtrlPort:	2342,			// port for local control service
 	HttpPort:	80,				// expected port for HTTP connections
 	HttpsPort:	443,			// expected port for HTTPS connections
+	
+	ImageDefs:	"./images/images.xml",
+	Upload:		UploadDefs {
+					Path:			"./uploads",
+					Keyring:		"./uploads/pubring.gpg",
+					SharePrimeOfs:	568,
+					ShareTreshold:	2,
+				},
 }
 
 ///////////////////////////////////////////////////////////////////////
@@ -139,13 +161,17 @@ func callback (mode int, param *parser.Parameter) bool {
 		
 		if mode != parser.LIST {
 			switch param.Name {
-				case "LogFile":		CfgData.LogFile = param.Value
-				case "LogToFile":	CfgData.LogState = (param.Value == "ON")
-				case "LogLevel":	logger.SetLogLevelFromName (param.Value)
-				case "CrtlPort":	setIntValue (&CfgData.CtrlPort, param.Value)
-				case "HttpPort":	setIntValue (&CfgData.HttpPort, param.Value)
-				case "HttpsPort":	setIntValue (&CfgData.HttpsPort, param.Value)
-				case "ImageDefs":	InitImageHandler (param.Value)
+				case "LogFile":			CfgData.LogFile = param.Value
+				case "LogToFile":		CfgData.LogState = (param.Value == "ON")
+				case "LogLevel":		logger.SetLogLevelFromName (param.Value)
+				case "CrtlPort":		setIntValue (&CfgData.CtrlPort, param.Value)
+				case "HttpPort":		setIntValue (&CfgData.HttpPort, param.Value)
+				case "HttpsPort":		setIntValue (&CfgData.HttpsPort, param.Value)
+				case "ImageDefs":		CfgData.ImageDefs = param.Value
+				case "Path":			CfgData.Upload.Path = param.Value
+				case "Keyring":			CfgData.Upload.Keyring = param.Value
+				case "SharePrimeOfs":	setIntValue (&CfgData.Upload.SharePrimeOfs, param.Value)
+				case "ShareTreshold":	setIntValue (&CfgData.Upload.ShareTreshold, param.Value)
 			}
 		}
 	} 
