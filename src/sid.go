@@ -56,6 +56,13 @@ func main() {
 	// handle configuration file and command line options
 	// (turns on file-based logging if specified on command line) 
 	InitConfig ()
+
+	//-----------------------------------------------------------------
+	//	Initialize cover-related settings
+	//-----------------------------------------------------------------
+	
+	InitImageHandler (CfgData.ImageDefs)
+	InitDocumentHandler (CfgData.Upload)
 	
 	//-----------------------------------------------------------------
 	//	Start network services
