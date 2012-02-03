@@ -24,7 +24,6 @@ package main
 
 import (
 	"net"
-	"gospel/logger"
 )
 
 ///////////////////////////////////////////////////////////////////////
@@ -120,12 +119,12 @@ func (i *ImgonHandler) getForm() string {
 		sep + lb +
 		"Content-Disposition: form-data; name=\"fileName[]\"" + lb3 +
 		sep + lb +
-		"Content-Disposition: form-data; name=\"file[]\"; filename=\"" + img.Name + "\"" + lb +
- 		"Content-Type: " + img.Mime + lb2 +
- 		string(GetUploadContent (img.Path)) + lb +
+		"Content-Disposition: form-data; name=\"file[]\"; filename=\"" + img.name + "\"" + lb +
+ 		"Content-Type: " + img.mime + lb2 +
+ 		string(GetUploadContent (img.path)) + lb +
 		sep + lb +
 		"Content-Disposition: form-data; name=\"alt[]\"\n\n" +
- 		img.Comment + lb +
+ 		img.comment + lb +
 		sep + lb +
  		"Content-Disposition: form-data; name=\"new_width[]\"" + lb3 +
 		sep + lb +
@@ -135,11 +134,6 @@ func (i *ImgonHandler) getForm() string {
 		sep + "--" + lb2
 	
 	i.posts[boundary] = []byte(post)
-	
-	logger.Println (logger.DBG_ALL, "@@@")
-	logger.Println (logger.DBG_ALL, post)
-	logger.Printf  (logger.DBG_ALL, "Length=%d\n", len(post))
-	logger.Println (logger.DBG_ALL, "@@@")
 
 	// create upload form
 	return CreateUploadForm ("/upload/" + boundary, len(i.posts[boundary])+32)
