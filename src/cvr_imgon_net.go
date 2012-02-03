@@ -24,6 +24,7 @@ package main
 
 import (
 	"net"
+	"gospel/logger"
 )
 
 ///////////////////////////////////////////////////////////////////////
@@ -31,14 +32,14 @@ import (
 
 /*
  * Handler for cover content for "imgon.net" cover site.
+ * It encapsulates a list of POST content definitions with a key
+ * value that is the boundary specification of the POST content.
  */
 type ImgonHandler struct {
-	path		string			// path to cover data
+	posts	map[string]([]byte)	// list of cover POST replacements
 }
 
 ///////////////////////////////////////////////////////////////////////
-// Public functions
-
 /*
  * Create a new cover server instance (imgon.net:80)
  * @return *Cover - pointer to cover server instance
@@ -51,7 +52,7 @@ func NewCvrImgon() *Cover {
 		states:		make (map[net.Conn]*State),
 		htmls:		make (map[string]string),
 		hdlr:		&ImgonHandler{
-						path:	"./images",
+						posts:	make(map[string]([]byte)),
 					},
 	}
 	// initialize instance
@@ -60,18 +61,103 @@ func NewCvrImgon() *Cover {
 	return cover
 }
 
-//=====================================================================
+///////////////////////////////////////////////////////////////////////
 /*
  * Get client-side upload form for next cover content.
  * @return string - upload form page content
+ *
+ * =====================================
+ * POST request format for cover server:
+ * =====================================
+ *
+ *-----------------------------<boundary>
+ *Content-Disposition: form-data; name="imgUrl"
+ *<nl>
+ *<nl>
+ *-----------------------------<boundary>
+ *Content-Disposition: form-data; name="fileName[]"
+ *<nl>
+ *<nl>
+ *-----------------------------<boundary>
+ *Content-Disposition: form-data; name="file[]"; filename="<name>"
+ *Content-Type: <mime>
+ *<nl>
+ *<content>
+ *-----------------------------<boundary>
+ *Content-Disposition: form-data; name="alt[]"
+ *<nl>
+ *<description>
+ *-----------------------------<boundary>
+ *Content-Disposition: form-data; name="new_width[]"
+ *<nl>
+ *<nl>
+ *-----------------------------<boundary>
+ *Content-Disposition: form-data; name="new_height[]"
+ *<nl>
+ *<nl>
+ *-----------------------------<boundary>
+ *Content-Disposition: form-data; name="submit"
+ *<nl>
+ *Upload
+ *-----------------------------<boundary>--
+ *<nl>
  */
 func (i *ImgonHandler) getForm() string {
 
-	// get next image size
-	size := 1234567
+	// get random image and boundary id
+	img := GetNextImage()
+	boundary := CreateBoundary (30)
 	
+	// build POST content suitable for upload to cover site
+	// and save it in the handler structure
+	lb := "\r\n"
+	lb2 := lb + lb
+	lb3 := lb2 + lb
+	sep := "-----------------------------" + boundary
+	post :=
+		sep + lb +
+		"Content-Disposition: form-data; name=\"imgUrl\"" + lb3 +
+		sep + lb +
+		"Content-Disposition: form-data; name=\"fileName[]\"" + lb3 +
+		sep + lb +
+		"Content-Disposition: form-data; name=\"file[]\"; filename=\"" + img.Name + "\"" + lb +
+ 		"Content-Type: " + img.Mime + lb2 +
+ 		string(GetUploadContent (img.Path)) + lb +
+		sep + lb +
+		"Content-Disposition: form-data; name=\"alt[]\"\n\n" +
+ 		img.Comment + lb +
+		sep + lb +
+ 		"Content-Disposition: form-data; name=\"new_width[]\"" + lb3 +
+		sep + lb +
+		"Content-Disposition: form-data; name=\"new_height[]\"" + lb3 +
+		sep + lb +
+		"Content-Disposition: form-data; name=\"submit\"" + lb2 + "Upload" + lb +
+		sep + "--" + lb2
+	
+	i.posts[boundary] = []byte(post)
+	
+	logger.Println (logger.DBG_ALL, "@@@")
+	logger.Println (logger.DBG_ALL, post)
+	logger.Printf  (logger.DBG_ALL, "Length=%d\n", len(post))
+	logger.Println (logger.DBG_ALL, "@@@")
+
 	// create upload form
-	return CreateUploadForm ("upload", size)  
+	return CreateUploadForm ("/upload/" + boundary, len(i.posts[boundary])+32)
 } 
+
+//=====================================================================
+/*
+ * get cover site POST content for given boundary id.
+ * @param id string - boundary id (key used to store POST content)
+ * @return []byte - POST content
+ */
+func (i *ImgonHandler) getPostContent (id string) []byte {
+	if post,ok := i.posts[id]; ok {
+		// delete POST from list
+		i.posts[id] = nil,false
+		return post
+	}
+	return nil
+}
 
 
