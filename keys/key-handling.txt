@@ -11,7 +11,7 @@ Assumptions:
 	  reviewer.
 	* Uploaded documents and additional files needed to access the
 	  documents are downloaded from the survey server on a regular
-	  basis an distributed to all reviewers (everything is encrypted
+	  basis and distributed to all reviewers (everything is encrypted
 	  and can therefore be send over insecure channels.
 	* Each reviewer has PGP/GnuPG installed on his/her computer and
 	  knows how to use a command line shell. Every reviewer as a key
@@ -36,9 +36,9 @@ this prefix is a 16-digit unique number; the file names look like this:
 	4534645319481941.E8055A66.gpg
 
 The first file (*.document.aes256) contains the encrypted client
-document. A key is needed to decrypt the document; this key can
-only be created by two co-operating reviewers. The key is also
-unique for each uploaded client document!
+document. A key is needed to decrypt the document; this key can only
+be created by a specified number of co-operating reviewers. The key is
+also unique for each uploaded client document!
 
 All the other files (*.*.gpg) are related to the trusted reviewers;
 there are as many files as there a reviewers. The second part of the
@@ -81,16 +81,16 @@ gpg: encrypted with 2048-bit RSA key, ID 2D4B56FD, created 2012-02-03
       "Reviewer2 <reviewer2@survey.org>"
 -----------------------------------------------------------------------
 
-The decrypted files are names "share1" and "share2" in this example, but
-the reviewers can use any name for the files they like as long as the
-names are unique.
+The decrypted files are named "share1" and "share2" in this example,
+but the reviewers can use any name for the files they like as long as
+the names are unique.
 
 =======================================================================
 Step 3: Decrypting the client document
 =======================================================================
 
 These share files from the previous step are now exchanged between the
-reviewers or they both use a common computer to finish the key recovery.
+reviewers or they use a common computer to finish the key recovery.
 To decrypt the client document the following command is used:
 
 -----------------------------------------------------------------------
