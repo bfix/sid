@@ -24,7 +24,16 @@ package main
 
 import (
 	"net"
+	"time"
 	"gospel/logger"
+)
+
+///////////////////////////////////////////////////////////////////////
+// Constants
+
+const (
+	delay = 100000
+	retries = 1000
 )
 
 ///////////////////////////////////////////////////////////////////////
@@ -41,7 +50,7 @@ func sendData (conn net.Conn, data []byte, srv string) bool {
 
 	count := len(data)		// total length of data
 	start := 0				// start position of slice
-	retry := 0				// retry conter
+	retry := 0				// retry counter
 	
 	// write data to socket buffer
 	for count > 0 {
@@ -60,7 +69,8 @@ func sendData (conn net.Conn, data []byte, srv string) bool {
 					nerr := err.(net.Error)
 					if nerr.Timeout() || nerr.Temporary() {
 						retry++
-						if retry == 3 {
+						time.Sleep (delay)
+						if retry == retries {
 							logger.Printf (logger.ERROR, "[%s] Write failed after retries: %s\n", srv, err.String())
 							return false
 						}
@@ -72,6 +82,9 @@ func sendData (conn net.Conn, data []byte, srv string) bool {
 		}
 	}
 	// report success
+	if retry > 0 {
+		logger.Printf (logger.INFO, "[%s] %d retries needed to send data.\n", srv, retry)
+	}
 	return true
 }
 
@@ -86,7 +99,7 @@ func sendData (conn net.Conn, data []byte, srv string) bool {
  */
 func rcvData (conn net.Conn, data []byte, srv string) (int, bool) {
 
-	for retry := 0; retry < 3; {
+	for retry := 0; retry < retries; {
 		// read data from socket buffer
 		n,err := conn.Read (data)
 		if err != nil {
@@ -99,6 +112,7 @@ func rcvData (conn net.Conn, data []byte, srv string) (int, bool) {
 						return 0, true
 					} else if nerr.Temporary() {
 						retry++
+						time.Sleep (delay)
 						continue
 					}
 				default:
@@ -107,6 +121,9 @@ func rcvData (conn net.Conn, data []byte, srv string) (int, bool) {
 			}
 		}
 		// report success
+		if retry > 0 {
+			logger.Printf (logger.INFO, "[%s] %d retries needed to receive data.\n", srv, retry)
+		}
 		return n,true
 	}
 	// retries failed
