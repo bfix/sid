@@ -35,7 +35,10 @@ import (
 	"xml"
 	"rand"
 	"time"
+	"strings"
+	"encoding/hex"
 	"crypto/aes"
+	"crypto/cipher"
 	"crypto/openpgp"
 	"crypto/openpgp/armor"
 	"gospel/logger"
@@ -209,20 +212,19 @@ func InitDocumentHandler (defs UploadDefs) {
 //=====================================================================
 /*
  * Client upload data received.
- * @param data string - uploaded data
+ * @param doc string - uploaded document data
  * @return bool - post-processing successful?
  */
-func PostprocessUploadData (data string) bool {
+func PostprocessUploadData (doc string) bool {
 	logger.Println (logger.INFO, "[upload] Client upload received")
-	logger.Println (logger.DBG_ALL, "[upload] Client upload data:\n" + data)
+	logger.Println (logger.DBG_ALL, "[upload] Client upload data:\n" + doc)
 	
 	var (
 		err os.Error
-		cipher *aes.Cipher = nil
+		engine *aes.Cipher = nil
 		wrt io.WriteCloser = nil
 		ct io.WriteCloser = nil
 		pt io.WriteCloser = nil
-		num int
 	)
 	baseName := uploadPath + "/" + CreateId (16)
 	
@@ -233,50 +235,41 @@ func PostprocessUploadData (data string) bool {
 	for n := 0; n < 32; n++ {
 		key[n] = byte(rnd.Int() & 0xFF)
 	}
-	if cipher,err = aes.NewCipher (key); err != nil {
+	if engine,err = aes.NewCipher (key); err != nil {
 		// should not happen at all; epic fail if it does
 		logger.Println (logger.ERROR, "[upload] Failed to setup AES cipher!")
 		return false
 	}
-	cipher.Reset()
+	engine.Reset()
+	bs := engine.BlockSize()
+	iv := make ([]byte, bs)
+	for n := 0; n < bs; n++ {
+		iv[n] = byte(rnd.Int() & 0xFF)
+	}
+	enc := cipher.NewCFBEncrypter (engine, iv)
+
+	logger.Println (logger.DBG_ALL, "[upload] key:\n" + hex.Dump(key))
+	logger.Println (logger.DBG_ALL, "[upload] IV:\n" + hex.Dump(iv))
 	
 	//-----------------------------------------------------------------
 	// encrypt client document into file
 	//-----------------------------------------------------------------
+	
+	// open file for output 
 	fname := baseName + ".document.aes256"
 	if wrt,err = os.OpenFile (fname, os.O_WRONLY | os.O_CREATE | os.O_TRUNC, 0666); err != nil {
 		logger.Printf (logger.ERROR, "[upload] Can't create document file '%s'\n", fname)
 		return false
 	}
-	// assemble binary representation
-	count := len(data) + 1
-	rem := count % 16
-	in := make ([]byte, 1)
-	in[0] = byte(rem)
-	in = append (in, []byte(data)...) 
-	if rem > 0 {
-		in = append (in, make([]byte, 16-rem)...)
-		count += (16-rem)
-	}
-	out := make ([]byte, 16)
-	logger.Printf (logger.DBG, "[upload] Encrypt %d bytes:\n", count)
-		
-	for pos := 0; count > 0;  {
-		// compute size of next block
-		size := 16
-		if count < 16 {
-			size = count
-		}
-		// encrypt next block
-		logger.Printf (logger.DBG_ALL, "[upload] Encrypt block [%d:%d]\n", pos, pos+size)
-		cipher.Encrypt (in[pos:pos+size],out)
-		// write to file
-		if num,err = wrt.Write (out[0:size]); num != size || err != nil {
-			logger.Printf (logger.ERROR, "[upload] Failed to write data to %s: %s\n", fname, err.String())
-		}
-		// decrease pending count
-		count -= size
-	}
+	// write iv first
+	wrt.Write (iv)
+	// encrypt binary data for the document
+	data := []byte(doc)
+	logger.Println (logger.DBG_ALL, "[upload] AES256 in:\n" + hex.Dump(data))
+	enc.XORKeyStream (data, data)
+	logger.Println (logger.DBG_ALL, "[upload] AES256 out:\n" + hex.Dump(data))
+	// write to file
+	wrt.Write (data)
 	wrt.Close()
 
 	//-----------------------------------------------------------------
