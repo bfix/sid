@@ -140,11 +140,12 @@ func callback (mode int, param *parser.Parameter) bool {
 		if mode != parser.LIST {
 			switch param.Name {
 				case "LogFile":		CfgData.LogFile = param.Value
-				case "LogState":	CfgData.LogState = (param.Value == "ON")
+				case "LogToFile":	CfgData.LogState = (param.Value == "ON")
 				case "LogLevel":	logger.SetLogLevelFromName (param.Value)
 				case "CrtlPort":	setIntValue (&CfgData.CtrlPort, param.Value)
 				case "HttpPort":	setIntValue (&CfgData.HttpPort, param.Value)
 				case "HttpsPort":	setIntValue (&CfgData.HttpsPort, param.Value)
+				case "ImageDefs":	InitImageHandler (param.Value)
 			}
 		}
 	} 
