@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<images>
+	<image>
+		<name>Chinatown.gif</name>
+		<comment>Busy street in china</comment>
+		<path>./images/img-0001.gif</path>
+		<mime>image/gif</mime>
+	</image>
+	<image>
+		<name>Festival.gif</name>
+		<comment>In front of a stage</comment>
+		<path>./images/img-0002.gif</path>
+		<mime>image/gif</mime>
+	</image>
+	<image>
+		<name>Lhasa.gif</name>
+		<comment>Lhasa palace</comment>
+		<path>./images/img-0003.gif</path>
+		<mime>image/gif</mime>
+	</image>
+	<image>
+		<name>Fruits-23.gif</name>
+		<comment>My tomato harvest</comment>
+		<path>./images/img-0004.gif</path>
+		<mime>image/gif</mime>
+	</image>
+	<image>
+		<name>Bees-1.gif</name>
+		<comment>Feeding bee</comment>
+		<path>./images/img-0005.gif</path>
+		<mime>image/gif</mime>
+	</image>
+</images>

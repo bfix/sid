@@ -1,13 +1,12 @@
-#!/bin/bash
+#!/bin/tcsh
 
-clear
+set base = /home/WDBZ/sid
+set prog = $base/sid
+set logf = sid.log
 
-EXEC=""
-[ -x ../_bin/src ] && EXEC=../_bin/src
-[ -x ../src/sid ] && EXEC=../src/sid
-
-echo "Running '${EXEC} $*' ..."
-
-${EXEC} $*
+while ({$prog})
+	set tstamp = `date +"%Y%m%d%H%M%S"`
+	mv $base/$logf $base/logs/$logf-$tstamp
+end
 
 exit 0
