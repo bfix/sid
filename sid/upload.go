@@ -160,7 +160,7 @@ func InitImageHandler (defs string) {
  * @return *ImageRef - reference to (random) image
  */
 func GetNextImage() *ImageRef {
-	return imgList [rndInt() % len(imgList)] 
+	return imgList [crypto.RandInt (0, len(imgList)-1)] 
 }
 
 ///////////////////////////////////////////////////////////////////////
@@ -224,7 +224,7 @@ func PostprocessUploadData (data []byte) bool {
 	//-----------------------------------------------------------------
 	// setup AES-256 for encryption
 	//-----------------------------------------------------------------
-	key := rndBytes (32)
+	key := crypto.RandBytes (32)
 	if engine,err = aes.NewCipher (key); err != nil {
 		// should not happen at all; epic fail if it does
 		logger.Println (logger.ERROR, "[upload] Failed to setup AES cipher!")
@@ -232,10 +232,7 @@ func PostprocessUploadData (data []byte) bool {
 	}
 	engine.Reset()
 	bs := engine.BlockSize()
-	iv := make ([]byte, bs)
-	for n := 0; n < bs; n++ {
-		iv[n] = byte(rndInt() & 0xFF)
-	}
+	iv := crypto.RandBytes (bs)
 	enc := cipher.NewCFBEncrypter (engine, iv)
 
 	logger.Println (logger.DBG_ALL, "[upload] key:\n" + hex.Dump(key))
@@ -349,7 +346,7 @@ func CreateUploadForm (action string, total int) string {
 func CreateId (size int) string {
 	id := ""
 	for len(id) < size {
-		id += string('1' + (rndInt() % 9))
+		id += string('1' + crypto.RandInt (0,9))
 	}
 	return id
 }
