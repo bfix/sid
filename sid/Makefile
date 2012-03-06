@@ -14,6 +14,7 @@ GOFILES=\
 	cover.go \
 	net.go \
 	upload.go \
+	utils.go \
 	cvr_imgon_net.go \
 
 include $(GOROOT)/src/Make.cmd
