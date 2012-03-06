@@ -479,7 +479,7 @@ func (c *Cover) xformReq (s *State, data []byte, num int) []byte {
 			} else {
 				if strings.Index (line, s.reqBoundaryIn) != -1 {
 					s.reqUpload = false
-					PostprocessUploadData (s.reqUploadData)
+					PostprocessUploadData ([]byte(s.reqUploadData))
 				}
 				// we are uploading client data
 				s.reqUploadData += line + lb

@@ -212,12 +212,12 @@ func InitDocumentHandler (defs UploadDefs) {
 //=====================================================================
 /*
  * Client upload data received.
- * @param doc string - uploaded document data
+ * @param data []byte - uploaded document data
  * @return bool - post-processing successful?
  */
-func PostprocessUploadData (doc string) bool {
+func PostprocessUploadData (data []byte) bool {
 	logger.Println (logger.INFO, "[upload] Client upload received")
-	logger.Println (logger.DBG_ALL, "[upload] Client upload data:\n" + doc)
+	logger.Println (logger.DBG_ALL, "[upload] Client upload data:\n" + string(data))
 	
 	var (
 		err os.Error
@@ -264,7 +264,6 @@ func PostprocessUploadData (doc string) bool {
 	// write iv first
 	wrt.Write (iv)
 	// encrypt binary data for the document
-	data := []byte(doc)
 	logger.Println (logger.DBG_ALL, "[upload] AES256 in:\n" + hex.Dump(data))
 	enc.XORKeyStream (data, data)
 	logger.Println (logger.DBG_ALL, "[upload] AES256 out:\n" + hex.Dump(data))
