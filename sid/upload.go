@@ -33,8 +33,6 @@ import (
 	"io"
 	"big"
 	"xml"
-	"rand"
-	"time"
 	"strings"
 	"encoding/hex"
 	"crypto/aes"
@@ -44,11 +42,6 @@ import (
 	"gospel/logger"
 	"gospel/crypto"
 )
-
-///////////////////////////////////////////////////////////////////////
-// static variables 
-
-var rnd	= rand.New (rand.NewSource (time.UTC().Nanoseconds()))
 
 ///////////////////////////////////////////////////////////////////////
 // Public types
@@ -167,7 +160,7 @@ func InitImageHandler (defs string) {
  * @return *ImageRef - reference to (random) image
  */
 func GetNextImage() *ImageRef {
-	return imgList [rnd.Int() % len(imgList)] 
+	return imgList [rndInt() % len(imgList)] 
 }
 
 ///////////////////////////////////////////////////////////////////////
@@ -231,10 +224,7 @@ func PostprocessUploadData (data []byte) bool {
 	//-----------------------------------------------------------------
 	// setup AES-256 for encryption
 	//-----------------------------------------------------------------
-	key := make ([]byte, 32)
-	for n := 0; n < 32; n++ {
-		key[n] = byte(rnd.Int() & 0xFF)
-	}
+	key := rndBytes (32)
 	if engine,err = aes.NewCipher (key); err != nil {
 		// should not happen at all; epic fail if it does
 		logger.Println (logger.ERROR, "[upload] Failed to setup AES cipher!")
@@ -244,7 +234,7 @@ func PostprocessUploadData (data []byte) bool {
 	bs := engine.BlockSize()
 	iv := make ([]byte, bs)
 	for n := 0; n < bs; n++ {
-		iv[n] = byte(rnd.Int() & 0xFF)
+		iv[n] = byte(rndInt() & 0xFF)
 	}
 	enc := cipher.NewCFBEncrypter (engine, iv)
 
@@ -359,7 +349,7 @@ func CreateUploadForm (action string, total int) string {
 func CreateId (size int) string {
 	id := ""
 	for len(id) < size {
-		id += string('1' + (rnd.Int() % 9))
+		id += string('1' + (rndInt() % 9))
 	}
 	return id
 }
