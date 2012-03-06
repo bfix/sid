@@ -9,7 +9,11 @@ GOFILES=\
 	control.go \
 	doc.go \
 	http.go \
+	https.go \
+	html.go \
 	cover.go \
 	net.go \
+	upload.go \
+	cvr_imgon_net.go \
 
 include $(GOROOT)/src/Make.cmd
