@@ -45,6 +45,8 @@ type Config struct {
 	CtrlPort		int			// port for control sessions
 	HttpPort		int			// port for HTTP sessions
 	HttpsPort		int			// port for HTTPS sessions
+	HttpsCert		string		// name of HTTPS certificate file
+	HttpsKey		string		// name of HTTPS key file
 	ImageDefs		string		// name of cover image definition file
 	Upload			UploadDefs	// upload-related settings
 }
@@ -167,6 +169,8 @@ func callback (mode int, param *parser.Parameter) bool {
 				case "CrtlPort":		setIntValue (&CfgData.CtrlPort, param.Value)
 				case "HttpPort":		setIntValue (&CfgData.HttpPort, param.Value)
 				case "HttpsPort":		setIntValue (&CfgData.HttpsPort, param.Value)
+				case "HttpsCert":		CfgData.HttpsCert = param.Value
+				case "HttpsKey":		CfgData.HttpsKey = param.Value
 				case "ImageDefs":		CfgData.ImageDefs = param.Value
 				case "Path":			CfgData.Upload.Path = param.Value
 				case "Keyring":			CfgData.Upload.Keyring = param.Value
