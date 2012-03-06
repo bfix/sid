@@ -79,6 +79,9 @@ func main() {
 	network.RunService ("tcp", ":" + strconv.Itoa(CfgData.CtrlPort), ctrl)
 	network.RunService ("tcp", ":" + strconv.Itoa(CfgData.HttpPort), http)
 	
+	// start HTTPS service
+	go httpsServe()
+	
 	// wait for termination
 	<-ch
 	logger.Println (logger.INFO, "[sid] Application terminated.")
