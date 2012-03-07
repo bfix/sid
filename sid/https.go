@@ -26,6 +26,7 @@ import (
 	"http"
 	"strconv"
 	"strings"
+	"sid_custom"
 	"gospel/logger"
 )
 
@@ -36,6 +37,11 @@ import (
  * @param req *http.Request - request data
  */
 func handler (resp http.ResponseWriter, req *http.Request) {
+
+	// call custom handler first
+	if sid_custom.HandleCustomResources (resp, req) {
+		return
+	}
 
 	// get requested resource reference
 	ref := req.URL.String()

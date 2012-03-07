@@ -44,18 +44,6 @@ import (
 )
 
 ///////////////////////////////////////////////////////////////////////
-// Public types
-
-/*
- * UploadHandler: Generate next client-side upload form that matches
- * the next cover content for upload to the cover server.
- */
-type UploadHandler interface {
-	getForm()					string		// get upload form
-	getPostContent (id string)	[]byte		// get cover POST content
-}
-
-///////////////////////////////////////////////////////////////////////
 // Image handler: Provide access to (annotated) image content
 // to be used as cover content in upload procedures. Annotations
 // include mime type, comments, etc. pp.

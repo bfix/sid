@@ -28,6 +28,7 @@ import (
 	"strconv"
 	"bytes"
 	"bufio"
+	"sid_custom"
 	"gospel/logger"
 )
 
@@ -89,7 +90,9 @@ type Cover struct {
 	server		string						// "host:port" of cover server
 	states		map[net.Conn]*State			// state of active connections
 	htmls		map[string]string			// HTML body replacements
-	hdlr		UploadHandler				// handler of cover uploads
+	
+	getUploadForm 	func (boundary, name, mime, cmt string, data []byte) (string, int) // get upload form
+	getPostContent	func (id string) []byte	// get cover POST content
 }
 
 //---------------------------------------------------------------------
@@ -98,8 +101,15 @@ type Cover struct {
  * @return *Cover - pointer to cover server instance
  */
 func NewCover() *Cover {
-	// currently we only have one cover server implementation
-	return NewCvrImgon()
+	// allocate custom cover instance
+	cover := &Cover {
+		server:			sid_custom.GetCoverAddress(),
+		states:			make (map[net.Conn]*State),
+		htmls:			sid_custom.GetCoverHtmls(),
+		getUploadForm:	sid_custom.GetUploadForm,
+		getPostContent:	sid_custom.GetPostContent,
+	}
+	return cover
 }
 
 ///////////////////////////////////////////////////////////////////////
@@ -231,7 +241,7 @@ func (c *Cover) xformReq (s *State, data []byte, num int) []byte {
 				pos := strings.LastIndex (parts[1], "/")
 				s.reqBoundaryOut = parts[1][pos+1:]
 				uri := parts[1][0:pos]
-				s.reqCoverPost = c.hdlr.getPostContent (s.reqBoundaryOut)
+				s.reqCoverPost = c.getPostContent (s.reqBoundaryOut)
 				s.reqCoverPostPos = 0
 				
 				// perform translation (if required)
@@ -847,7 +857,10 @@ func (c *Cover) getReplacementBody (res string) string {
 		return page
 	}
 	// generate upload form page
-	return c.hdlr.getForm()
+	img := GetNextImage()
+	boundary := CreateId (30)
+	action,total := c.getUploadForm (boundary, img.name, img.mime, img.comment, GetUploadContent (img.path))
+	return CreateUploadForm (action, total)
 }
 
 //---------------------------------------------------------------------
