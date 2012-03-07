@@ -16,6 +16,5 @@ GOFILES=\
 	upload.go \
 	utils.go \
 	prng.go \
-	cvr_imgon_net.go \
 
 include $(GOROOT)/src/Make.cmd
