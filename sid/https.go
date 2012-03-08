@@ -26,7 +26,7 @@ import (
 	"http"
 	"strconv"
 	"strings"
-	"sid_custom"
+	"sid"
 	"gospel/logger"
 )
 
@@ -39,7 +39,7 @@ import (
 func handler (resp http.ResponseWriter, req *http.Request) {
 
 	// call custom handler first
-	if sid_custom.HandleCustomResources (resp, req) {
+	if sid.HandleCustomResources (resp, req) {
 		return
 	}
 
