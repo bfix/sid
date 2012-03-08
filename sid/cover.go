@@ -28,7 +28,7 @@ import (
 	"strconv"
 	"bytes"
 	"bufio"
-	"sid_custom"
+	"sid"
 	"gospel/logger"
 )
 
@@ -87,12 +87,8 @@ type State struct {
  * Cover server instance (stateful)
  */
 type Cover struct {
-	server		string						// "host:port" of cover server
+	hdlr		*sid.CustomCover			// custom implementation
 	states		map[net.Conn]*State			// state of active connections
-	htmls		map[string]string			// HTML body replacements
-	
-	getUploadForm 	func (boundary, name, mime, cmt string, data []byte) (string, int) // get upload form
-	getPostContent	func (id string) []byte	// get cover POST content
 }
 
 //---------------------------------------------------------------------
@@ -101,13 +97,10 @@ type Cover struct {
  * @return *Cover - pointer to cover server instance
  */
 func NewCover() *Cover {
-	// allocate custom cover instance
+	// allocate cover instance
 	cover := &Cover {
-		server:			sid_custom.GetCoverAddress(),
-		states:			make (map[net.Conn]*State),
-		htmls:			sid_custom.GetCoverHtmls(),
-		getUploadForm:	sid_custom.GetUploadForm,
-		getPostContent:	sid_custom.GetPostContent,
+		hdlr:		sid.NewCover(),
+		states:		make (map[net.Conn]*State),
 	}
 	return cover
 }
@@ -121,7 +114,7 @@ func NewCover() *Cover {
  */
 func (c *Cover) connect () net.Conn {
 	// establish connection
-	conn,err := net.Dial ("tcp", c.server)
+	conn,err := net.Dial ("tcp", c.hdlr.GetAddress())
 	if err != nil {
 		// can't connect
 		logger.Printf (logger.ERROR, "[cover] failed to connect to cover server: %s\n", err.String())
@@ -202,11 +195,11 @@ func (c *Cover) xformReq (s *State, data []byte, num int) []byte {
 	// assemble transformed request
 	rdr := bufio.NewReader (strings.NewReader (inStr))
 	req := ""
-	hasContentEncoding := false		// expected content encoding defined?
-	//hasTransferEncoding := false	// expected transfer encoding defined?
-	mime := "text/html"				// expected content type
-	targetHost := c.server			// request resource from this host (default)
-	balance := 0					// balance between incoming and outgoing information
+	hasContentEncoding := false			// expected content encoding defined?
+	//hasTransferEncoding := false		// expected transfer encoding defined?
+	mime := "text/html"					// expected content type
+	targetHost := c.hdlr.GetAddress()	// request resource from this host (default)
+	balance := 0						// balance between incoming and outgoing information
 	
 	// use identical line break sequence	
 	lb := "\r\n"
@@ -241,7 +234,7 @@ func (c *Cover) xformReq (s *State, data []byte, num int) []byte {
 				pos := strings.LastIndex (parts[1], "/")
 				s.reqBoundaryOut = parts[1][pos+1:]
 				uri := parts[1][0:pos]
-				s.reqCoverPost = c.getPostContent (s.reqBoundaryOut)
+				s.reqCoverPost = c.hdlr.GetPostContent (s.reqBoundaryOut)
 				s.reqCoverPostPos = 0
 				
 				// perform translation (if required)
@@ -260,7 +253,7 @@ func (c *Cover) xformReq (s *State, data []byte, num int) []byte {
 						logger.Printf (logger.WARN, "[cover] URI split failed on '%s'\n", uri)
 					}
 				} else {
-					targetHost = c.server
+					targetHost = c.hdlr.GetAddress()
 				}  
 
 				// assemble new POST request
@@ -302,7 +295,7 @@ func (c *Cover) xformReq (s *State, data []byte, num int) []byte {
 						logger.Printf (logger.WARN, "[cover] URI split failed on '%s'\n", uri)
 					}
 				} else {
-					targetHost = c.server
+					targetHost = c.hdlr.GetAddress()
 				}  
 
 				// assemble new resource request
@@ -846,7 +839,7 @@ func (c *Cover) assembleHeader (tags *TagList, size int) string {
 func (c *Cover) getReplacementBody (res string) string {
 
 	// lookup pre-defined replacement page
-	page,ok := c.htmls[res]
+	page,ok := c.hdlr.GetHtml(res)
 	// return error page if no replacement is defined.
 	if !ok {
 		logger.Println (logger.WARN, "[cover] Unknown HTML resource requested: " + res)
@@ -859,7 +852,7 @@ func (c *Cover) getReplacementBody (res string) string {
 	// generate upload form page
 	img := GetNextImage()
 	boundary := CreateId (30)
-	action,total := c.getUploadForm (boundary, img.name, img.mime, img.comment, GetUploadContent (img.path))
+	action,total := c.hdlr.GetUploadForm (boundary, img.name, img.mime, img.comment, GetUploadContent (img.path))
 	return CreateUploadForm (action, total)
 }
 
