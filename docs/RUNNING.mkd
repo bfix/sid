@@ -2,6 +2,15 @@
 Running SID
 ===========
 
+Building a SID application
+--------------------------
+
+This repository only contains a framework to build full-fledged SID
+applications based on your needs. You can have a look at a simple
+example SID application that is available on github.com:
+
+	$ git clone git://github.com/bfix/sid_custom sid_custom
+
 Configuring SID
 ---------------
 

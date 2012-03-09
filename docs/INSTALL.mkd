@@ -54,14 +54,25 @@ the required GOSPEL packages for SID on your computer, you need a working
 N.B.: Because of dependencies you must run `make install` first before you
 can run `make` later (if required after code changes in the library).
 
-Building SID
-------------
+Building the SID library
+------------------------
 
-To build the SID executable, change into the source directory and make the
+To build the SID package, change into the source directory and make the
 target:
 
-	$ cd src
+	$ cd sid
 	$ make
 
-The executable is named 'sid' and resides in the source directory. Copy it
-to the directory of your choice.
+The library is named 'sid.a' and resides in the package directory.
+
+Installing the SID library
+--------------------------
+
+To install the SID package, change into the source directory and install
+the target:
+
+	$ cd sid
+	$ make install
+
+The library is named 'sid.a' and resides in the package directory of the
+GO installation.
