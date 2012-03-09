@@ -29,6 +29,7 @@ package main
 // Import external declarations.
 
 import (
+	"sid"
 	"strconv"
 	"gospel/network"
 	"gospel/logger"
@@ -61,8 +62,8 @@ func main() {
 	//	Initialize cover-related settings
 	//-----------------------------------------------------------------
 	
-	InitImageHandler (CfgData.ImageDefs)
 	InitDocumentHandler (CfgData.Upload)
+	sid.CustomInit()
 	
 	//-----------------------------------------------------------------
 	//	Start network services
