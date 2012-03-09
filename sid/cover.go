@@ -91,8 +91,7 @@ type Cover struct {
 	Posts			map[string]([]byte)		// list of cover POST replacements
 	Pages			map[string]string		// list of pre-defined web pages
 	
-	GetPage			func (string) string	// Function to get web page
-	GetUploadForm	func () string			// Function to get upload form
+	GetUploadForm	func (*Cover) string	// Function to get upload form
 }
 
 ///////////////////////////////////////////////////////////////////////
@@ -855,7 +854,7 @@ func (c *Cover) getReplacementBody (res string) string {
 		return page
 	}
 	// generate upload form page
-	return c.GetUploadForm ()
+	return c.GetUploadForm (c)
 }
 
 //---------------------------------------------------------------------
