@@ -9,12 +9,10 @@ GOFILES=\
 	control.go \
 	doc.go \
 	http.go \
-	https.go \
 	html.go \
 	cover.go \
 	net.go \
 	upload.go \
 	utils.go \
-	prng.go \
 
-include $(GOROOT)/src/Make.cmd
+include $(GOROOT)/src/Make.pkg

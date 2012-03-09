@@ -1,6 +1,6 @@
 /*
  * ====================================================================
- *    Server In Disguise (SID)  --  Main application star-up code
+ *    Server In Disguise (SID)  --  Main application start-up code
  * ====================================================================
  * Start-up connection handlers for HTTP, HTTPS and control services.
  * Parameters are defined in a configuration file or defined/overridden
@@ -23,22 +23,28 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-package main
+package sid
 
 ///////////////////////////////////////////////////////////////////////
 // Import external declarations.
 
 import (
-	"sid"
 	"strconv"
 	"gospel/network"
 	"gospel/logger"
 )
 
 ///////////////////////////////////////////////////////////////////////
+/*
+ * Custom initialization method: Return cover instance to be used
+ * to handle cover traffic
+ */
+var CustomInitialization func () *Cover = nil
+
+///////////////////////////////////////////////////////////////////////
 // Main application start-up code.
 
-func main() {
+func Startup () {
 
 	logger.Println (logger.INFO, "[sid] ==============================")
 	logger.Println (logger.INFO, "[sid] SID v.01 -- Server In Disguise")
@@ -63,7 +69,7 @@ func main() {
 	//-----------------------------------------------------------------
 	
 	InitDocumentHandler (CfgData.Upload)
-	sid.CustomInit()
+	cover := CustomInitialization()
 	
 	//-----------------------------------------------------------------
 	//	Start network services
@@ -74,14 +80,11 @@ func main() {
 	ctrl := &ControlSrv { ch }
 	
 	// create HTTP service
-	http := NewHttpSrv()
+	http := NewHttpSrv (cover)
 	
 	// start network services
 	network.RunService ("tcp", ":" + strconv.Itoa(CfgData.CtrlPort), ctrl)
 	network.RunService ("tcp", ":" + strconv.Itoa(CfgData.HttpPort), http)
-	
-	// start HTTPS service
-	go httpsServe()
 	
 	// wait for termination
 	<-ch

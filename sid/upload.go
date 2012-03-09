@@ -22,7 +22,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-package main
+package sid
 
 ///////////////////////////////////////////////////////////////////////
 // Import external declarations.
@@ -68,7 +68,7 @@ func InitDocumentHandler (defs UploadDefs) {
 	rdr,err := os.Open (defs.Keyring)
 	if err != nil {
 		// can't read keys -- terminate!
-		logger.Printf (logger.ERROR, "[upload] Can't read keyring file '%s' -- terminating!\n", defs.Keyring)
+		logger.Printf (logger.ERROR, "[sid.upload] Can't read keyring file '%s' -- terminating!\n", defs.Keyring)
 		os.Exit (1)
 	}
 	defer rdr.Close()
@@ -76,7 +76,7 @@ func InitDocumentHandler (defs UploadDefs) {
 	// read public keys from keyring
 	if reviewer,err = openpgp.ReadKeyRing (rdr); err != nil {
 		// can't read keys -- terminate!
-		logger.Printf (logger.ERROR, "[upload] Failed to process keyring '%s' -- terminating!\n", defs.Keyring)
+		logger.Printf (logger.ERROR, "[sid.upload] Failed to process keyring '%s' -- terminating!\n", defs.Keyring)
 		os.Exit (1)
 	}
 }
@@ -88,8 +88,8 @@ func InitDocumentHandler (defs UploadDefs) {
  * @return bool - post-processing successful?
  */
 func PostprocessUploadData (data []byte) bool {
-	logger.Println (logger.INFO, "[upload] Client upload received")
-	logger.Println (logger.DBG_ALL, "[upload] Client upload data:\n" + string(data))
+	logger.Println (logger.INFO, "[sid.upload] Client upload received")
+	logger.Println (logger.DBG_ALL, "[sid.upload] Client upload data:\n" + string(data))
 	
 	var (
 		err os.Error
@@ -99,11 +99,7 @@ func PostprocessUploadData (data []byte) bool {
 		pt io.WriteCloser = nil
 	)
 
-	id := ""
-	for len(id) < 16 {
-		id += string('0' + crypto.RandInt (0,9))
-	}
-	baseName := uploadPath + "/" + id
+	baseName := uploadPath + "/" + CreateId (16)
 	
 	//-----------------------------------------------------------------
 	// setup AES-256 for encryption
@@ -111,7 +107,7 @@ func PostprocessUploadData (data []byte) bool {
 	key := crypto.RandBytes (32)
 	if engine,err = aes.NewCipher (key); err != nil {
 		// should not happen at all; epic fail if it does
-		logger.Println (logger.ERROR, "[upload] Failed to setup AES cipher!")
+		logger.Println (logger.ERROR, "[sid.upload] Failed to setup AES cipher!")
 		return false
 	}
 	engine.Reset()
@@ -119,8 +115,8 @@ func PostprocessUploadData (data []byte) bool {
 	iv := crypto.RandBytes (bs)
 	enc := cipher.NewCFBEncrypter (engine, iv)
 
-	logger.Println (logger.DBG_ALL, "[upload] key:\n" + hex.Dump(key))
-	logger.Println (logger.DBG_ALL, "[upload] IV:\n" + hex.Dump(iv))
+	logger.Println (logger.DBG_ALL, "[sid.upload] key:\n" + hex.Dump(key))
+	logger.Println (logger.DBG_ALL, "[sid.upload] IV:\n" + hex.Dump(iv))
 	
 	//-----------------------------------------------------------------
 	// encrypt client document into file
@@ -129,15 +125,15 @@ func PostprocessUploadData (data []byte) bool {
 	// open file for output 
 	fname := baseName + ".document.aes256"
 	if wrt,err = os.OpenFile (fname, os.O_WRONLY | os.O_CREATE | os.O_TRUNC, 0666); err != nil {
-		logger.Printf (logger.ERROR, "[upload] Can't create document file '%s'\n", fname)
+		logger.Printf (logger.ERROR, "[sid.upload] Can't create document file '%s'\n", fname)
 		return false
 	}
 	// write iv first
 	wrt.Write (iv)
 	// encrypt binary data for the document
-	logger.Println (logger.DBG_ALL, "[upload] AES256 in:\n" + hex.Dump(data))
+	logger.Println (logger.DBG_ALL, "[sid.upload] AES256 in:\n" + hex.Dump(data))
 	enc.XORKeyStream (data, data)
-	logger.Println (logger.DBG_ALL, "[upload] AES256 out:\n" + hex.Dump(data))
+	logger.Println (logger.DBG_ALL, "[sid.upload] AES256 out:\n" + hex.Dump(data))
 	// write to file
 	wrt.Write (data)
 	wrt.Close()
@@ -156,19 +152,19 @@ func PostprocessUploadData (data []byte) bool {
 		fname = baseName + "." + strings.ToUpper(id) + ".gpg"
 		// create file for output
 		if wrt,err = os.OpenFile (fname,  os.O_WRONLY | os.O_CREATE | os.O_TRUNC, 0666); err != nil {
-			logger.Printf (logger.ERROR, "[upload] Can't create share file '%s'\n", fname)
+			logger.Printf (logger.ERROR, "[sid.upload] Can't create share file '%s'\n", fname)
 			continue
 		}
 		// create PGP armorer
 		if ct,err = armor.Encode (wrt, "PGP MESSAGE", nil); err != nil {
-			logger.Printf (logger.ERROR, "[upload] Can't create armorer: %s\n", err.String())
+			logger.Printf (logger.ERROR, "[sid.upload] Can't create armorer: %s\n", err.String())
 			wrt.Close()
 			continue
 		}
 		// encrypt share to file	
 		recipient[0] = ent
 		if pt,err = openpgp.Encrypt (ct, recipient, nil, nil); err != nil {
-			logger.Printf (logger.ERROR, "[upload] Can't create encrypter: %s\n", err.String())
+			logger.Printf (logger.ERROR, "[sid.upload] Can't create encrypter: %s\n", err.String())
 			ct.Close()
 			wrt.Close()
 			continue

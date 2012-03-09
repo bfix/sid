@@ -20,7 +20,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-package main
+package sid
 
 ///////////////////////////////////////////////////////////////////////
 // Import external declarations.
@@ -46,11 +46,12 @@ type HttpSrv struct  {
 ///////////////////////////////////////////////////////////////////////
 /*
  * Create and initialize new HTTP service instance
+ * @param cover *Cover - refderence to cover server instance
  */
-func NewHttpSrv() *HttpSrv {
+func NewHttpSrv (cover *Cover) *HttpSrv {
 	return &HttpSrv {
 		//	Instantiate Cover (content transformer)
-		hndlr:	NewCover(),
+		hndlr:	cover,
 	}
 }
 
@@ -103,7 +104,7 @@ func (s *HttpSrv) Process (client net.Conn) {
 			// send incoming response data to client
 			if !sendData (client, resp, "http") {
 				// terminate session on failure
-				logger.Println (logger.ERROR, "[http] Failed to send data to client.")
+				logger.Println (logger.ERROR, "[sid.http] Failed to send data to client.")
 				return
 			}
 		}
@@ -125,7 +126,7 @@ func (s *HttpSrv) Process (client net.Conn) {
 			// send request to cover server
 			if !sendData (cover, req, "http") {
 				// terminate session on failure
-				logger.Println (logger.ERROR, "[http] Failed to send data to cover.")
+				logger.Println (logger.ERROR, "[sid.http] Failed to send data to cover.")
 				return
 			}
 		}
@@ -141,7 +142,7 @@ func (s *HttpSrv) Process (client net.Conn) {
 func (s *HttpSrv) CanHandle (protocol string) bool {
 	rc := strings.HasPrefix (protocol, "tcp")
 	if !rc {
-		logger.Println (logger.INFO, "[http] Unsupported protocol '" + protocol + "'") 
+		logger.Println (logger.INFO, "[sid.http] Unsupported protocol '" + protocol + "'") 
 	}
 	return rc 
 }
@@ -156,7 +157,7 @@ func (s *HttpSrv) CanHandle (protocol string) bool {
 func (s *HttpSrv) IsAllowed (addr string) bool {
 	rc := strings.HasPrefix (addr, "127.0.0.1")
 	if !rc {
-		logger.Println (logger.WARN, "[http] Invalid remote address '" + addr + "'") 
+		logger.Println (logger.WARN, "[sid.http] Invalid remote address '" + addr + "'") 
 	}
 	return rc
 }
@@ -167,5 +168,5 @@ func (s *HttpSrv) IsAllowed (addr string) bool {
  * @return string - name of control service (for logging purposes)
  */
 func (s *HttpSrv) GetName() string {
-	return "http"
+	return "sid.http"
 }

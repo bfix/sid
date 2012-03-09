@@ -19,7 +19,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-package main
+package sid
 
 ///////////////////////////////////////////////////////////////////////
 // Import external declarations.
@@ -67,7 +67,7 @@ func (c *ControlSrv) Process (client net.Conn) {
 		}
 
 		// handle command
-		logger.Println (logger.INFO, "[ctrl] command '" + cmd + "'")
+		logger.Println (logger.INFO, "[sid.ctrl] command '" + cmd + "'")
 		switch cmd {
 			//-------------------------------------------------
 			// Terminate application
@@ -76,12 +76,12 @@ func (c *ControlSrv) Process (client net.Conn) {
 						b.Flush()
 						cmd,_ = readCmd (b)
 						if cmd == "YES" {
-							logger.Println (logger.WARN, "[ctrl] Terminating application")
+							logger.Println (logger.WARN, "[sid.ctrl] Terminating application")
 							b.WriteString ("Terminating application...")
 							b.Flush()
 							c.Ch <- true
 						} else {
-							logger.Println (logger.WARN, "[ctrl] Response '" + cmd + "' -- Termination aborted!")
+							logger.Println (logger.WARN, "[sid.ctrl] Response '" + cmd + "' -- Termination aborted!")
 							b.WriteString ("Wrong response -- Termination aborted!")
 							b.Flush()
 						}
@@ -117,7 +117,7 @@ func (c *ControlSrv) Process (client net.Conn) {
 func (c *ControlSrv) CanHandle (protocol string) bool {
 	rc := strings.HasPrefix (protocol, "tcp")
 	if !rc {
-		logger.Println (logger.WARN, "[control] Unsupported protocol '" + protocol + "'")
+		logger.Println (logger.WARN, "[sid.ctrl] Unsupported protocol '" + protocol + "'")
 	}
 	return rc
 }
@@ -131,7 +131,7 @@ func (c *ControlSrv) CanHandle (protocol string) bool {
 func (c *ControlSrv) IsAllowed (addr string) bool {
 	rc := strings.HasPrefix (addr, "127.0.0.1")
 	if !rc {
-		logger.Println (logger.WARN, "[control] Unsupported remote address '" + addr + "'")
+		logger.Println (logger.WARN, "[sid.ctrl] Unsupported remote address '" + addr + "'")
 	}
 	return rc
 }
@@ -142,7 +142,7 @@ func (c *ControlSrv) IsAllowed (addr string) bool {
  * @return string - name of control service (for logging purposes)
  */
 func (c *ControlSrv) GetName() string {
-	return "ctrl"
+	return "sid.ctrl"
 }
 
 ///////////////////////////////////////////////////////////////////////

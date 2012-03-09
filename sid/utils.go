@@ -17,7 +17,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-package main
+package sid
 
 ///////////////////////////////////////////////////////////////////////
 // Import external declarations.
@@ -25,6 +25,7 @@ package main
 import (
 	"os"
 	"io"
+	"gospel/crypto"
 )
 
 ///////////////////////////////////////////////////////////////////////
@@ -36,7 +37,7 @@ import (
  * @param chunkSize int - max. size of data blobs for callback handler
  * @param hdlr func (data []byte) bool - callback handler
  */
-func processFile (fname string, chunkSize int, hdlr func (data []byte) bool) os.Error {
+func ProcessFile (fname string, chunkSize int, hdlr func (data []byte) bool) os.Error {
 
 	// open file
 	file,err := os.Open (fname)
@@ -46,7 +47,7 @@ func processFile (fname string, chunkSize int, hdlr func (data []byte) bool) os.
 	defer file.Close()
 	
 	// process content
-	return processStream (file, chunkSize, hdlr)
+	return ProcessStream (file, chunkSize, hdlr)
 }
 
 ///////////////////////////////////////////////////////////////////////
@@ -58,7 +59,7 @@ func processFile (fname string, chunkSize int, hdlr func (data []byte) bool) os.
  * @param chunkSize int - max. size of data blobs for callback handler
  * @param hdlr func (data []byte) bool - callback handler
  */
-func processStream (rdr io.Reader, chunkSize int, hdlr func (data []byte) bool) os.Error {
+func ProcessStream (rdr io.Reader, chunkSize int, hdlr func (data []byte) bool) os.Error {
 
 	// process file	
 	data := make ([]byte, chunkSize)
@@ -81,4 +82,18 @@ func processStream (rdr io.Reader, chunkSize int, hdlr func (data []byte) bool) 
 	} 
 	// report success.
 	return nil
+}
+
+///////////////////////////////////////////////////////////////////////
+/*
+ * Create a decimal number of given length to be used as an identifier.
+ * @param size int - desired length of identifier
+ * @return string - generated number string
+ */
+func CreateId (size int) string {
+	id := string('1' + crypto.RandInt (0,8))
+	for len(id) < size {
+		id += string('0' + crypto.RandInt (0,9))
+	}
+	return id
 }

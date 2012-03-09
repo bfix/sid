@@ -17,7 +17,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-package main
+package sid
 
 ///////////////////////////////////////////////////////////////////////
 // Import external declarations.
@@ -170,7 +170,7 @@ func parseHTML (rdr io.Reader, links *TagList, list *TagList) bool {
 			// for possible translation (currently unhandled)
 			switch tk.Error() {
 				case io.ErrUnexpectedEOF:
-					logger.Println (logger.ERROR, "[html] Error parsing content: " + tk.Error().String())
+					logger.Println (logger.ERROR, "[sid.html] Error parsing content: " + tk.Error().String())
 				case os.EOF:
 					break loop
 			}
@@ -217,15 +217,15 @@ func parseHTML (rdr io.Reader, links *TagList, list *TagList) bool {
 				tag.attrs["height"] = "1"
 				// add to list
 				list.Put (tag)
-				logger.Println (logger.DBG, "[html] body => " + tag.String())
+				logger.Println (logger.DBG, "[sid.html] body => " + tag.String())
 
 			case tag.name == "script":
 				list.Put (tag)
-				logger.Println (logger.DBG, "[html] body => " + tag.String())
+				logger.Println (logger.DBG, "[sid.html] body => " + tag.String())
 
 			case tag.name == "link":
 				links.Put (tag)
-				logger.Println (logger.DBG, "[html] hdr => " + tag.String())
+				logger.Println (logger.DBG, "[sid.html] hdr => " + tag.String())
 /*					
 			default:
 				logger.Println (logger.DBG_ALL, "*** " + tag.String())
@@ -299,7 +299,7 @@ func getAttrs (tk *html.Tokenizer) (list map[string]string) {
 	// handle panic during parsing
 	defer func() {
 		if r := recover(); r != nil {
-			logger.Printf (logger.WARN, "[html] Skipping fragmented tag: %v\n", r)
+			logger.Printf (logger.WARN, "[sid.html] Skipping fragmented tag: %v\n", r)
 			list = nil
         }
 	}();

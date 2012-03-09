@@ -17,7 +17,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-package main
+package sid
 
 ///////////////////////////////////////////////////////////////////////
 // Import external declarations.
@@ -28,7 +28,6 @@ import (
 	"strconv"
 	"bytes"
 	"bufio"
-	"sid"
 	"gospel/logger"
 )
 
@@ -87,22 +86,13 @@ type State struct {
  * Cover server instance (stateful)
  */
 type Cover struct {
-	hdlr		*sid.CustomCover			// custom implementation
-	states		map[net.Conn]*State			// state of active connections
-}
-
-//---------------------------------------------------------------------
-/*
- * Create a new cover server instance
- * @return *Cover - pointer to cover server instance
- */
-func NewCover() *Cover {
-	// allocate cover instance
-	cover := &Cover {
-		hdlr:		sid.NewCover(),
-		states:		make (map[net.Conn]*State),
-	}
-	return cover
+	Address			string					// address of cover server
+	States			map[net.Conn]*State		// state of active connections
+	Posts			map[string]([]byte)		// list of cover POST replacements
+	Pages			map[string]string		// list of pre-defined web pages
+	
+	GetPage			func (string) string	// Function to get web page
+	GetUploadForm	func () string			// Function to get upload form
 }
 
 ///////////////////////////////////////////////////////////////////////
@@ -114,17 +104,17 @@ func NewCover() *Cover {
  */
 func (c *Cover) connect () net.Conn {
 	// establish connection
-	conn,err := net.Dial ("tcp", c.hdlr.GetAddress())
+	conn,err := net.Dial ("tcp", c.Address)
 	if err != nil {
 		// can't connect
-		logger.Printf (logger.ERROR, "[cover] failed to connect to cover server: %s\n", err.String())
+		logger.Printf (logger.ERROR, "[sid.cover] failed to connect to cover server: %s\n", err.String())
 		return nil
 	}
-	logger.Println (logger.INFO, "[cover] connected to cover server...")
+	logger.Println (logger.INFO, "[sid.cover] connected to cover server...")
 	
 	// allocate state information and add to state list
 	// initialize struct with default data
-	c.states[conn] = &State {
+	c.States[conn] = &State {
 		//-------------------------------------------------------------
 		// Request state
 		//-------------------------------------------------------------
@@ -160,7 +150,7 @@ func (c *Cover) connect () net.Conn {
  * @param conn net.Conn - client connection
  */
 func (c *Cover) disconnect (conn net.Conn) {
-	c.states[conn] = nil,false
+	c.States[conn] = nil,false
 	conn.Close()
 }
 
@@ -171,8 +161,23 @@ func (c *Cover) disconnect (conn net.Conn) {
  * @return *state - reference to state instance
  */
 func (c *Cover) GetState (conn net.Conn) *State {
-	if s,ok := c.states[conn]; ok {
+	if s,ok := c.States[conn]; ok {
 		return s
+	}
+	return nil
+}
+
+//---------------------------------------------------------------------
+/*
+ * get cover site POST content for given boundary id.
+ * @param id string - boundary id (key used to store POST content)
+ * @return []byte - POST content
+ */
+func (c *Cover) GetPostContent (id string) []byte {
+	if post,ok := c.Posts[id]; ok {
+		// delete POST from list
+		c.Posts[id] = nil,false
+		return post
 	}
 	return nil
 }
@@ -189,8 +194,8 @@ func (c *Cover) GetState (conn net.Conn) *State {
 func (c *Cover) xformReq (s *State, data []byte, num int) []byte {
 
 	inStr := string(data[0:num])
-	logger.Printf (logger.DBG_HIGH, "[cover] %d bytes received from client.\n", num)
-	logger.Println (logger.DBG_ALL, "[cover] Incoming request:\n" + inStr + "\n")
+	logger.Printf (logger.DBG_HIGH, "[sid.cover] %d bytes received from client.\n", num)
+	logger.Println (logger.DBG_ALL, "[sid.cover] Incoming request:\n" + inStr + "\n")
 
 	// assemble transformed request
 	rdr := bufio.NewReader (strings.NewReader (inStr))
@@ -198,7 +203,7 @@ func (c *Cover) xformReq (s *State, data []byte, num int) []byte {
 	hasContentEncoding := false			// expected content encoding defined?
 	//hasTransferEncoding := false		// expected transfer encoding defined?
 	mime := "text/html"					// expected content type
-	targetHost := c.hdlr.GetAddress()	// request resource from this host (default)
+	targetHost := c.Address				// request resource from this host (default)
 	balance := 0						// balance between incoming and outgoing information
 	
 	// use identical line break sequence	
@@ -228,18 +233,18 @@ func (c *Cover) xformReq (s *State, data []byte, num int) []byte {
 			case strings.HasPrefix (line, "POST "):
 				// split line into parts
 				parts := strings.Split (line, " ")
-				logger.Printf (logger.DBG_HIGH, "[cover] POST '%s'\n", parts[1])
+				logger.Printf (logger.DBG_HIGH, "[sid.cover] POST '%s'\n", parts[1])
 				
 				// POST uri encodes the key to the cover POST content
 				pos := strings.LastIndex (parts[1], "/")
 				s.reqBoundaryOut = parts[1][pos+1:]
 				uri := parts[1][0:pos]
-				s.reqCoverPost = c.hdlr.GetPostContent (s.reqBoundaryOut)
+				s.reqCoverPost = c.GetPostContent (s.reqBoundaryOut)
 				s.reqCoverPostPos = 0
 				
 				// perform translation (if required)
 				uri = translateURI (uri)
-				logger.Printf (logger.INFO, "[cover] URI translation: '%s' => '%s'\n", parts[1], uri)
+				logger.Printf (logger.INFO, "[sid.cover] URI translation: '%s' => '%s'\n", parts[1], uri)
 				
 				// if URI refers to an external host, split into
 				// host reference and resource specification
@@ -248,12 +253,12 @@ func (c *Cover) xformReq (s *State, data []byte, num int) []byte {
 					if pos != -1 {
 						targetHost = uri[0:pos]
 						uri = uri[pos:]
-						logger.Printf (logger.INFO, "[cover] URI split: '%s', '%s'\n", targetHost, uri)
+						logger.Printf (logger.INFO, "[sid.cover] URI split: '%s', '%s'\n", targetHost, uri)
 					} else { 
-						logger.Printf (logger.WARN, "[cover] URI split failed on '%s'\n", uri)
+						logger.Printf (logger.WARN, "[sid.cover] URI split failed on '%s'\n", uri)
 					}
 				} else {
-					targetHost = c.hdlr.GetAddress()
+					targetHost = c.Address
 				}  
 
 				// assemble new POST request
@@ -277,11 +282,11 @@ func (c *Cover) xformReq (s *State, data []byte, num int) []byte {
 			case strings.HasPrefix (line, "GET "):
 				// split line into parts
 				parts := strings.Split (line, " ")
-				logger.Printf (logger.DBG_HIGH, "[cover] resource='%s'\n", parts[1])
+				logger.Printf (logger.DBG_HIGH, "[sid.cover] resource='%s'\n", parts[1])
 				
 				// perform translation (if required)
 				uri := translateURI (parts[1])
-				logger.Printf (logger.INFO, "[cover] URI translation: '%s' => '%s'\n", parts[1], uri)
+				logger.Printf (logger.INFO, "[sid.cover] URI translation: '%s' => '%s'\n", parts[1], uri)
 				
 				// if URI refers to an external host, split into
 				// host reference and resource specification
@@ -290,12 +295,12 @@ func (c *Cover) xformReq (s *State, data []byte, num int) []byte {
 					if pos != -1 {
 						targetHost = uri[0:pos]
 						uri = uri[pos:]
-						logger.Printf (logger.INFO, "[cover] URI split: '%s', '%s'\n", targetHost, uri)
+						logger.Printf (logger.INFO, "[sid.cover] URI split: '%s', '%s'\n", targetHost, uri)
 					} else { 
-						logger.Printf (logger.WARN, "[cover] URI split failed on '%s'\n", uri)
+						logger.Printf (logger.WARN, "[sid.cover] URI split failed on '%s'\n", uri)
 					}
 				} else {
-					targetHost = c.hdlr.GetAddress()
+					targetHost = c.Address
 				}  
 
 				// assemble new resource request
@@ -317,7 +322,7 @@ func (c *Cover) xformReq (s *State, data []byte, num int) []byte {
 				// split line into parts
 				parts := strings.Split (line, " ")
 				// replace hostname reference 
-				logger.Printf (logger.DBG_HIGH, "[cover] Host replaced with '%s'\n", targetHost)
+				logger.Printf (logger.DBG_HIGH, "[sid.cover] Host replaced with '%s'\n", targetHost)
 				req += "Host: " + targetHost + lb
 				// keep track of balance
 				balance += (len(parts[1]) - len(targetHost))
@@ -372,7 +377,7 @@ func (c *Cover) xformReq (s *State, data []byte, num int) []byte {
 				if s.reqMode == REQ_POST {
 					// strip "boundary="
 					s.reqBoundaryIn = string(parts[2][9:]) 														
-					logger.Println (logger.DBG_HIGH, "[cover] Boundary=" + s.reqBoundaryIn)
+					logger.Println (logger.DBG_HIGH, "[sid.cover] Boundary=" + s.reqBoundaryIn)
 					repl := parts[0] + " " + mime +
 						  " boundary=-----------------------------" + s.reqBoundaryOut
 					balance += len(repl) - len(line)
@@ -471,7 +476,7 @@ func (c *Cover) xformReq (s *State, data []byte, num int) []byte {
 			}
 			line := strings.TrimRight (string(b), "\r\n")
 
-			//logger.Println (logger.DBG_ALL, "[cover] POST content: " + line + "\n")
+			//logger.Println (logger.DBG_ALL, "[sid.cover] POST content: " + line + "\n")
 			
 			if !s.reqUpload {
 				// check for start of document
@@ -519,15 +524,15 @@ func (c *Cover) xformReq (s *State, data []byte, num int) []byte {
 		}
 		
 		outStr := string(data[0:pos])
-		logger.Printf (logger.DBG_HIGH, "[cover] %d bytes send to cover server.\n", pos)
-		logger.Println (logger.DBG_ALL, "[cover] Outgoing request:\n" + outStr + "\n")
+		logger.Printf (logger.DBG_HIGH, "[sid.cover] %d bytes send to cover server.\n", pos)
+		logger.Println (logger.DBG_ALL, "[sid.cover] Outgoing request:\n" + outStr + "\n")
 		return data[0:pos]
 	}
 	
 	// check for completed request processing
 	if s.reqState == RS_DONE {
 		if balance != 0 {
-			logger.Printf (logger.WARN, "[cover] Unbalanced request: %d bytes diff\n", balance)
+			logger.Printf (logger.WARN, "[sid.cover] Unbalanced request: %d bytes diff\n", balance)
 		}
 	}
 	
@@ -537,9 +542,9 @@ func (c *Cover) xformReq (s *State, data []byte, num int) []byte {
 	}
 	// return transformed request
 	if num != len(req) {
-		logger.Printf (logger.WARN, "[cover] DIFF(request) = %d\n", len(req)-num)
+		logger.Printf (logger.WARN, "[sid.cover] DIFF(request) = %d\n", len(req)-num)
 	}
-	logger.Printf (logger.DBG_ALL, "[cover] Transformed request:\n" + req + "\n")
+	logger.Printf (logger.DBG_ALL, "[sid.cover] Transformed request:\n" + req + "\n")
 	return []byte(req)
 }
 
@@ -556,8 +561,8 @@ func (c *Cover) xformResp (s *State, data []byte, num int) []byte {
 
 	// log incoming packet
 	inStr := string(data[0:num])
-	logger.Printf (logger.DBG_HIGH, "[cover] %d bytes received from cover server.\n", num)
-	logger.Println (logger.DBG_ALL, "[cover] Incoming response:\n" + inStr + "\n")
+	logger.Printf (logger.DBG_HIGH, "[sid.cover] %d bytes received from cover server.\n", num)
+	logger.Println (logger.DBG_ALL, "[sid.cover] Incoming response:\n" + inStr + "\n")
 
 	// setup reader and response
 	size := num
@@ -579,16 +584,16 @@ func (c *Cover) xformResp (s *State, data []byte, num int) []byte {
 			line = strings.TrimRight (line, "\n\r")
 			if err != nil {
 				// header is not complete: wait for next response fragment
-				logger.Println (logger.WARN, "[cover] Response header fragmented!")
-				logger.Println (logger.DBG, "[cover] Assembled response:\n" + resp)
+				logger.Println (logger.WARN, "[sid.cover] Response header fragmented!")
+				logger.Println (logger.DBG, "[sid.cover] Assembled response:\n" + resp)
 				if size != len(resp) {
-					logger.Printf (logger.WARN, "[cover] DIFF(response:1) = %d\n", len(resp)-size)
+					logger.Printf (logger.WARN, "[sid.cover] DIFF(response:1) = %d\n", len(resp)-size)
 				}
 				return []byte(resp)
 			}
 			// check if header is available at all..
 			if strings.HasPrefix (line, "<!") {
-				logger.Println (logger.INFO, "[cover] No response header found: " + line)
+				logger.Println (logger.INFO, "[sid.cover] No response header found: " + line)
 				break hdr
 			}
 			
@@ -599,7 +604,7 @@ func (c *Cover) xformResp (s *State, data []byte, num int) []byte {
 				//-----------------------------------------------------
 				case len(line) == 0:
 					// we have parsed the header; continue with body
-					logger.Println (logger.DBG_ALL, "[cover] Incoming response header:\n" + resp)
+					logger.Println (logger.DBG_ALL, "[sid.cover] Incoming response header:\n" + resp)
 					// drop length encoding on gzip content
 					break hdr
 
@@ -610,7 +615,7 @@ func (c *Cover) xformResp (s *State, data []byte, num int) []byte {
 					// split line into parts
 					parts := strings.Split (line, " ")
 					status,_ := strconv.Atoi (parts[1])
-					logger.Printf (logger.DBG, "[cover] response status: %d\n", status)
+					logger.Printf (logger.DBG, "[sid.cover] response status: %d\n", status)
 					if status != 200 {
 						// pass back anything that is not OK
 						return data[0:size]
@@ -623,7 +628,7 @@ func (c *Cover) xformResp (s *State, data []byte, num int) []byte {
 					// split line into parts
 					parts := strings.Split (line, " ")
 					s.respType = strings.TrimRight (parts[1], ";")
-					logger.Println (logger.DBG_HIGH, "[cover] response type: " + s.respType)
+					logger.Println (logger.DBG_HIGH, "[sid.cover] response type: " + s.respType)
 
 				//-----------------------------------------------------
 				// Content-Encoding:
@@ -632,7 +637,7 @@ func (c *Cover) xformResp (s *State, data []byte, num int) []byte {
 					// split line into parts
 					parts := strings.Split (line, " ")
 					s.respEnc = parts[1]
-					logger.Println (logger.DBG_HIGH, "[cover] response encoding: " + s.respEnc)
+					logger.Println (logger.DBG_HIGH, "[sid.cover] response encoding: " + s.respEnc)
 			}
 			// assemble response
 			resp += line + lb
@@ -677,10 +682,10 @@ func (c *Cover) xformResp (s *State, data []byte, num int) []byte {
 			}
 			// assemble HTML body
 			resp += c.assembleBody (s, num, done)
-			logger.Println (logger.DBG_ALL, "[cover] Translated response:\n" + resp)
+			logger.Println (logger.DBG_ALL, "[sid.cover] Translated response:\n" + resp)
 			// return response data
 			if size != len(resp) {
-				logger.Printf (logger.WARN, "[cover] DIFF(response:2) = %d\n", len(resp)-size)
+				logger.Printf (logger.WARN, "[sid.cover] DIFF(response:2) = %d\n", len(resp)-size)
 			}
 			return []byte(resp)
 			
@@ -689,7 +694,7 @@ func (c *Cover) xformResp (s *State, data []byte, num int) []byte {
 		// pass them back to the client.
 		//-------------------------------------------------------------		
 		case strings.HasPrefix (s.respType, "image/"):
-			logger.Println (logger.DBG, "[cover] Image data passed to client")
+			logger.Println (logger.DBG, "[sid.cover] Image data passed to client")
 			return data[0:size]
 			
 		//-------------------------------------------------------------
@@ -703,9 +708,9 @@ func (c *Cover) xformResp (s *State, data []byte, num int) []byte {
 				resp += " " 
 			}
 			// return response data
-			logger.Println (logger.DBG, "[cover] JavaScript scrubbed")
+			logger.Println (logger.DBG, "[sid.cover] JavaScript scrubbed")
 			if size != len(resp) {
-				logger.Printf (logger.WARN, "[cover] DIFF(response:3) = %d\n", len(resp)-size)
+				logger.Printf (logger.WARN, "[sid.cover] DIFF(response:3) = %d\n", len(resp)-size)
 			}
 			return []byte(resp)
 			
@@ -720,15 +725,15 @@ func (c *Cover) xformResp (s *State, data []byte, num int) []byte {
 				resp += " " 
 			}
 			// return response data
-			logger.Println (logger.DBG, "[cover] CSS scrubbed")
+			logger.Println (logger.DBG, "[sid.cover] CSS scrubbed")
 			if size != len(resp) {
-				logger.Printf (logger.WARN, "[cover] DIFF(response:4) = %d\n", len(resp)-size)
+				logger.Printf (logger.WARN, "[sid.cover] DIFF(response:4) = %d\n", len(resp)-size)
 			}
 			return []byte(resp)
 	}
 	
 	//return untranslated response
-	logger.Println (logger.ERROR, "[cover] Unhandled response!")
+	logger.Println (logger.ERROR, "[sid.cover] Unhandled response!")
 	return data[0:size]		
 }
 
@@ -818,7 +823,7 @@ func (c *Cover) assembleHeader (tags *TagList, size int) string {
 			size -= len(inl)
 		} else {
 			// no: put it back
-			logger.Printf (logger.WARN, "[cover] can't add all header tags: %d are skipped\n", tags.Count()+1) 
+			logger.Printf (logger.WARN, "[sid.cover] can't add all header tags: %d are skipped\n", tags.Count()+1) 
 			break
 		}
 	}
@@ -839,10 +844,10 @@ func (c *Cover) assembleHeader (tags *TagList, size int) string {
 func (c *Cover) getReplacementBody (res string) string {
 
 	// lookup pre-defined replacement page
-	page,ok := c.hdlr.GetHtml(res)
+	page,ok := c.Pages [res]
 	// return error page if no replacement is defined.
 	if !ok {
-		logger.Println (logger.WARN, "[cover] Unknown HTML resource requested: " + res)
+		logger.Println (logger.WARN, "[sid.cover] Unknown HTML resource requested: " + res)
 		return "<h1>Unsupported page. Please return to previous page!</h1>"
 	}
 	// return normal pages
@@ -850,7 +855,7 @@ func (c *Cover) getReplacementBody (res string) string {
 		return page
 	}
 	// generate upload form page
-	return c.hdlr.GetUploadForm ()
+	return c.GetUploadForm ()
 }
 
 //---------------------------------------------------------------------
@@ -868,17 +873,17 @@ func (c *Cover) translateTag (tag *Tag) string {
 	if src,ok := tag.attrs["src"]; ok {
 		// translate "src" attribute of tag
 		trgt := translateURI (src)
-		logger.Printf (logger.INFO, "[cover] URI translation of '%s' => '%s'\n", src, trgt)
+		logger.Printf (logger.INFO, "[sid.cover] URI translation of '%s' => '%s'\n", src, trgt)
 		tag.attrs["src"] = trgt
 	} else if src,ok := tag.attrs["href"]; ok {
 		// translate "href" attribute of tag
 		trgt := translateURI (src)
-		logger.Printf (logger.INFO, "[cover] URI translation of '%s' => '%s'\n", src, trgt)
+		logger.Printf (logger.INFO, "[sid.cover] URI translation of '%s' => '%s'\n", src, trgt)
 		tag.attrs["href"] = trgt
 	} else {
 		// failed to access reference attribute?!
 		s := tag.String()
-		logger.Println (logger.ERROR, "[cover] Tag translation failed: " + s)
+		logger.Println (logger.ERROR, "[sid.cover] Tag translation failed: " + s)
 		return s
 	}
 	// return tag representation
