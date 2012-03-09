@@ -850,10 +850,7 @@ func (c *Cover) getReplacementBody (res string) string {
 		return page
 	}
 	// generate upload form page
-	img := GetNextImage()
-	boundary := CreateId (30)
-	action,total := c.hdlr.GetUploadForm (boundary, img.name, img.mime, img.comment, GetUploadContent (img.path))
-	return CreateUploadForm (action, total)
+	return c.hdlr.GetUploadForm ()
 }
 
 //---------------------------------------------------------------------
