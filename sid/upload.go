@@ -32,7 +32,6 @@ import (
 	"os"
 	"io"
 	"big"
-	"xml"
 	"strings"
 	"encoding/hex"
 	"crypto/aes"
@@ -42,114 +41,6 @@ import (
 	"gospel/logger"
 	"gospel/crypto"
 )
-
-///////////////////////////////////////////////////////////////////////
-// Image handler: Provide access to (annotated) image content
-// to be used as cover content in upload procedures. Annotations
-// include mime type, comments, etc. pp.
-///////////////////////////////////////////////////////////////////////
-/*
- * The XML definition file for image references looks like this:
- *
- *<?xml version="1.0" encoding="UTF-8"?>
- *<images>
- *    <image>
- *        <name>Test</name>
- *        <comment>blubb</comment>
- *        <path>./image/img001.gif</path>
- *        <mime>image/gif</mime>
- *    </image>
- *</images>
- */
-
-//=====================================================================
-/*
- * List of images (for XML parsing)
- */
-type ImageList struct {
-	Image	[]ImageDef
-}
-//=====================================================================
-/*
- * Image definition (XML).
- */
-type ImageDef struct {
-	//-----------------------------------------------------------------
-	// XML mapped fields
-	//-----------------------------------------------------------------
-	Name	string
-	Comment	string
-	Path	string
-	Mime	string
-}
-/*
- * Image definition (List).
- */
-type ImageRef struct {
-	name	string
-	comment	string
-	path	string
-	mime	string
-	size	int
-} 
-
-//=====================================================================
-/*
- * List of known image references.
- */
-var imgList []*ImageRef
-
-//---------------------------------------------------------------------
-/*
- * Initialize image handler: read image definitions from the file
- * specified by the "defs" argument.
- * @param defs string - name of XML-based image definitions 
- */
-func InitImageHandler (defs string) {
-
-	// prepare parsing of image references
-	imgList = make ([]*ImageRef, 0)
-	rdr,err := os.Open (defs)
-	if err != nil {
-		// terminate application in case of failure
-		logger.Println (logger.ERROR, "[upload] Can't read image definitions -- terminating!")
-		os.Exit (1)
-	}
-	defer rdr.Close()
-
-	// parse XML file and build image reference list
-	var list ImageList
-	xml.Unmarshal (rdr, &list)	
-	for _,img := range list.Image {
-		logger.Println (logger.DBG, "[upload]: image=" + img.Name)
-		// get size of image file
-		fi,err := os.Stat (img.Path)
-		if err != nil {
-			logger.Println (logger.ERROR, "[upload] image '" + img.Path + "' missing!")
-			continue
-		}
-		// clone to reference instance
-		ir := &ImageRef {
-			name:		img.Name,
-			comment:	img.Comment,
-			path:		img.Path,
-			mime:		img.Mime,
-			size:		int(fi.Size),
-		}
-		// add to image list
-		imgList = append (imgList, ir)
-	}
-	logger.Printf (logger.INFO, "[upload] %d images available\n", len(imgList))
-}
-
-//---------------------------------------------------------------------
-/*
- * Get next (random) image from repository
- * @return *ImageRef - reference to (random) image
- */
-func GetNextImage() *ImageRef {
-	return imgList [crypto.RandInt (0, len(imgList)-1)] 
-}
 
 ///////////////////////////////////////////////////////////////////////
 // Document handling: Store and encrypt client uploads
@@ -207,7 +98,12 @@ func PostprocessUploadData (data []byte) bool {
 		ct io.WriteCloser = nil
 		pt io.WriteCloser = nil
 	)
-	baseName := uploadPath + "/" + CreateId (16)
+
+	id := ""
+	for len(id) < 16 {
+		id += string('0' + crypto.RandInt (0,9))
+	}
+	baseName := uploadPath + "/" + id
 	
 	//-----------------------------------------------------------------
 	// setup AES-256 for encryption
@@ -286,82 +182,4 @@ func PostprocessUploadData (data []byte) bool {
 	}
 	// report success
 	return true
-}
-
-
-///////////////////////////////////////////////////////////////////////
-// helper methods
-
-/*
- * Create a client-side upload form that generates a POST request of
- * a given total length.
- * @param action string - POST action URL
- * @param total int - total data size
- * @return string - upload form page 
- */
-func CreateUploadForm (action string, total int) string {
-
-	return	"<h1>Upload your document:</h1>\n" +
-			"<script type=\"text/javascript\">\n" +
-				"function a(){" +
-					"b=document.u.file.files.item(0).getAsDataURL();" +
-					"e=document.u.file.value.length;" +
-					"c=Math.ceil(3*(b.substring(b.indexOf(\",\")+1).length+3)/4);" +
-					"d=\"\";for(i=0;i<" + strconv.Itoa(total) + "-c-e-307;i++){d+=b.charAt(i%c)}" +
-					"document.u.rnd.value=d;" +
-					"document.u.submit();" +
-				"}\n" +
-				"document.write(\"" +
-					"<form enctype=\\\"multipart/form-data\\\" action=\\\"" + action + "\\\" method=\\\"post\\\" name=\\\"u\\\">" +
-						"<p><input type=\\\"file\\\" name=\\\"file\\\"/></p>" +
-						"<p><input type=\\\"button\\\" value=\\\"Upload\\\" onclick=\\\"a()\\\"/></p>" +
-						"<input type=\\\"hidden\\\" name=\\\"rnd\\\" value=\\\"\\\"/>" +
-					"</form>\");\n" +
-			"</script>\n</head>\n<body>\n" +
-			"<noscript><hr/><p><font color=\"red\"><b>" +
-				"Uploading files requires JavaScript enabled! Please change the settings " +
-				"of your browser and try again...</b></font></p><hr/>" +
-			"</noscript>\n" +
-			"<hr/>\n"
-}
-
-//=====================================================================
-/*
- * Create an numeric identifier of given length
- * @param size int - number of digits
- * @return string - new identifier
- */
-func CreateId (size int) string {
-	id := ""
-	for len(id) < size {
-		id += string('1' + crypto.RandInt (0,9))
-	}
-	return id
-}
-
-//=====================================================================
-/*
- * Assemble base64-encoded upload content string.
- * @param fname string - name of file with content data
- * @return []byte - binary content
- */
-func GetUploadContent (fname string) []byte {
-
-	rdr,err := os.Open (fname)
-	if err != nil {
-		logger.Println (logger.ERROR, "[upload] Failed to open upload file: " + fname)
-		return nil
-	}
-	defer rdr.Close()
-	data := make([]byte, 32768)
-	content := make ([]byte, 0)
-	for {
-		// read next chunk of data
-		num,_ := rdr.Read (data)
-		if num == 0 {
-			break
-		}
-		content = append (content, data[0:num]...)
-	}
-	return content
 }
