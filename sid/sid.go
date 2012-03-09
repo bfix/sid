@@ -69,6 +69,11 @@ func Startup () {
 	//-----------------------------------------------------------------
 	
 	InitDocumentHandler (CfgData.Upload)
+	
+	if CustomInitialization == nil {
+		logger.Println (logger.ERROR, "[sid] No custom initialization function defined -- aborting!")
+		return
+	}
 	cover := CustomInitialization()
 	
 	//-----------------------------------------------------------------
