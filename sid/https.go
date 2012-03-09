@@ -107,6 +107,12 @@ func handler (resp http.ResponseWriter, req *http.Request) {
  */
 func httpsServe() {
 
+	// check for disabled HTTPS server
+	if CfgData.HttpsPort < 0 {
+		logger.Println (logger.INFO, "[https] HTTPS server disabled.")
+		return
+	}
+
 	// define handlers
 	http.HandleFunc ("/", handler)
 	
