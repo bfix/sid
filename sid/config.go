@@ -28,6 +28,7 @@ import (
 	"os"
 	"bufio"
 	"strconv"
+	"sid"
 	"gospel/parser"
 	"gospel/logger"
 )
@@ -47,7 +48,6 @@ type Config struct {
 	HttpsPort		int			// port for HTTPS sessions
 	HttpsCert		string		// name of HTTPS certificate file
 	HttpsKey		string		// name of HTTPS key file
-	ImageDefs		string		// name of cover image definition file
 	Upload			UploadDefs	// upload-related settings
 }
 
@@ -75,7 +75,6 @@ var CfgData Config = Config {
 	HttpPort:	80,				// expected port for HTTP connections
 	HttpsPort:	443,			// expected port for HTTPS connections
 	
-	ImageDefs:	"./images/images.xml",
 	Upload:		UploadDefs {
 					Path:			"./uploads",
 					Keyring:		"./uploads/pubring.gpg",
@@ -171,12 +170,14 @@ func callback (mode int, param *parser.Parameter) bool {
 				case "HttpsPort":		setIntValue (&CfgData.HttpsPort, param.Value)
 				case "HttpsCert":		CfgData.HttpsCert = param.Value
 				case "HttpsKey":		CfgData.HttpsKey = param.Value
-				case "ImageDefs":		CfgData.ImageDefs = param.Value
 				case "Path":			CfgData.Upload.Path = param.Value
 				case "Keyring":			CfgData.Upload.Keyring = param.Value
 				case "SharePrimeOfs":	setIntValue (&CfgData.Upload.SharePrimeOfs, param.Value)
 				case "ShareTreshold":	setIntValue (&CfgData.Upload.ShareTreshold, param.Value)
+				default:				return sid.CustomConfig (mode, param)
 			}
+		} else {
+			return sid.CustomConfig (mode, param)
 		}
 	} 
 	return true
