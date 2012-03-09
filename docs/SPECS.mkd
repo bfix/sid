@@ -20,9 +20,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 Scenario
 --------
 
-A number of people "C_n" want to sent documents to a receiver "R" via a
-web browser. An eavesdropper "E" wants to know which "C_n" communicates
-with "R" and what information was exchanged.      
+A number of clients "C_n" want to sent documents to a receiver "R" by using
+a web browser (file upload). An eavesdropper "E" wants to know which "C_n"
+communicates with "R" and what information was exchanged.      
 
 Objective
 ---------
@@ -35,33 +35,48 @@ Assumptions
     
 1. "E" may know that a "C_n" wants to communicate with "R"
 
-2. "E" knows all information given by "R" to "C_n" on how to communicate;
-   this includes the IP address of the server to which the document should
-   be uploaded by "C_n". Technically speaking this server is a TOR enclaved
-   server (running on the same machine as a TOR exit node).  
+2. "E" knows **all** information given by "R" to "C_n" on how to communicate;
+   this especially includes the IP address of the server to which the document
+   should be uploaded by "C_n" and any additional technical settings and
+   advice given to "C_n".   
         
-3. "E" has no (physical/logical) access to the computers of "C_n" or "R"
+3. "E" has no (physical/logical) access to the computers of "C_n" or "R".
 
-4. "E" has the capabilities to monitor all possible net traffic involved.          
-5. "C_n" is technically able to use the TOR network (via a browser bundle).
+4. "E" has the capabilities to monitor all possible net traffic involved.
+          
+5. "C_n" is technically able to follow any technical instruction given by "R"
+   on how to communicate (what applications to use, what configuration
+   settings to be applied,...)
 
 Approach
 --------
 
-1. "R" operates a computer that runs a "TOR exit node" and a "SID" to
-    receive the documents (via HTTP/POST requests) on the same machine.
+1. "R" operates a computer that runs a "TOR exit node" and a "SID" instance to
+    receive the documents (via HTTP/POST requests) on the same machine. This
+    setup is similar to the (no longer officially supported) TOR enclaved
+    server scheme. Traffic from the TOR exit node to the SID instance is not
+    visible from the outside.
+    
+2. "C_n" needs to install a TOR browser bundle on his/her computer once (and
+   keep it up-to-date with appropriate security updates). "C_n" also needs to
+   modify the TOR configuration file (*torrc*) on the computer to allow the
+   *.exit* address scheme involved ("*AllowDotExit 1*"). 
         
 2. If "C_n" want to sent a document, the following steps have to be
    performed:
     
     * "C_n" uses the TOR-enabled browser to connect to "SID" by specifying
-      the TOR address of the server in a special notation.
+      the TOR address of the server in a special notation called a DotExit
+      address. This ensures that the TOR circuit builder will use the TOR
+      exit node of "R" for communication with the SID instance.
               
-    * For all communication between "C_n" and the "SID", a cover communication
-      is generated (by "SID") between "SID" and a "Cover Server". The "Cover
-      Server" is not a server operated by "R" but is a public server on the
-      Internet. Traffic between the "SID" and the "Cover Server" look exactly
-      like traffic between the "TOR exit node" and the "Cover Server" to "E".
+    * For all communication between "C_n" and the SID instance, a cover
+      communication is generated between the SID instance and a "Cover
+      Server". The "Cover Server" is not a server operated by "R" but is a
+      public web server on the Internet. Traffic between SID and the "Cover
+      Server" look exactly like traffic between the "TOR exit node" and the
+      "Cover Server"; this way "E" has to believe that "C_n" is talking to
+      the cover server by looking at packet timing and size analysis.
 
 Components
 ----------
@@ -121,11 +136,11 @@ rather than the other way around.
 
 ### Assumptions:
 
-* "SID" is running on the same node as the TOR exit node (enclave)
+* "SID" is running on the same node as the TOR exit node (enclave scheme)
 
 * All TOR traffic to the "SID" is routed through the TOR exit node on the
-  same machine. (This is only true if the "SID" is always accessed via an
-  IP address instead of a domain name-based URL; see section "Vulnerabilities"
+  same machine. (This is only true if the "SID" is always accessed via a
+  TOR address instead of a domain name-based URL; see section "Vulnerabilities"
   for more details)  
   
 * Communication between the user and the "SID" through the TOR network

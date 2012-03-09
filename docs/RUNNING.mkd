@@ -5,15 +5,117 @@ Running SID
 Building a SID application
 --------------------------
 
-This repository only contains a framework to build full-fledged SID
-applications based on your needs. You can have a look at a simple
-example SID application that is available on github.com:
+This repository only contains a *framework* to build full-fledged SID
+applications based on your needs. So there is no way to "run" the code
+contained in this repository directly.
 
-	$ git clone git://github.com/bfix/sid_custom sid_custom
+You need to build a custom SID application that uses this framework and
+provides all the (additional) functionality you want to be bundled with your
+own SID application. You can have a look at a simple example SID application
+that is available on http://github.com/bfix/sid_custom.
 
 Configuring SID
 ---------------
 
+The framework contains a configuration file that specifies all the settings
+that can be applied to the framework functionality of SID. It can serve as
+a basis for your own, customized configuration file that will probably have
+a lot more settings for your customized application.
+
 Copy the example configuration file 'runtime/sid.cfg' to the runtime directory
 you want to use for SID. Edit the configuration file to match your local
-requirements.
+requirements and your customized SID application.
+
+The following sections describe the format and meaning of the configuration
+options available in the template file:
+
+### Logging-related settings 
+
+* `LogFile = sid.log,`
+
+	Defines the name of a log file (absolute path or relative to the runtime
+	directory)
+
+* `LogToFile = OFF,`
+
+	Defines if a log file is written (`ON`) or not (`OFF`)
+
+* `LogLevel = DBG_ALL,`
+
+	Defines the verbosity of the log (amount of logging data). The following
+	log levels are available; a described log level will always include
+	messages for a previous log level (so `WARN` will include `ERROR` messages
+	in the log stream):
+	
+	+ `ERROR`: error messages will be logged
+	+ `WARN`: warnings will be logged
+	+ `INFO`: informational messages will be logged
+	+ `DBG_HIGH`: debug messages will be logged (prio: high)
+	+ `DBG`: debug messages will be logged (prio: normal)
+	+ `DBG_ALL`: debug messages will be logged (prio: low)
+
+### Instance control
+
+* `CtrlPort = 2342,`
+
+	A SID instance will have a control port available to communicate with the
+	server for maintenance purposes. You start a control session from the host
+	the SID instance is running on by:
+	
+	`$ telnet localhost 2342`
+	
+	You will be presented with a control menu to perform various maintenance
+	tasks like shutting down a running SID instance.
+
+### SID port 
+
+* `HttpPort = 8080,`
+
+	This defines the port the SID instance is listening on for HTTP client
+	traffic.
+
+### Upload - related settings
+
+* `ClientUploads = { ... }
+
+	This defines the section related to client uploads.
+
+* `Path = ./uploads,`
+
+	Absolute or relative (to the current runtime directory) path for storing
+	client upload.-related information. This is the place where encrypted
+	client documents and shared secrets will be stored. This directory will
+	also by sync'd periodically with an external reviewer server/system.
+
+* `KeyRing = ./uploads/pubring.gpg,`
+
+	The GnuPG public keyring that contains all the reviewer keys that allow
+	access to shared secrets (and therefore uploaded client documents). This
+	keyring file must include at least on key!
+
+* `PrimeOfs = 568,`
+
+	Indirectly specifies the prime number `p` to be used for the underlying
+	prime field	for the secret sharing scheme. The prime p is defined by:
+	
+	`p = 2^256 - PrimeOfs`
+	
+	You don't need to (but of course are free to) change this value to use a
+	different prime `p` for your scheme for security reasons. 
+
+* `ShareTreshold = 2`
+
+	Defines how many reviewers with individual shared secrets must co-operate
+	to decrypt and access uploaded client documents. This number must be at
+	least `1` and must be less or equal to the number of keys in the public
+	keyring.
+
+
+Building a public keyring for reviewer keys
+-------------------------------------------
+
+To decrypt and access uploaded client documents you need at least on reviewer
+with a GnuPG key pair (see SECRET-SHARING.mkd for more details). The public
+keys of all reviewers needed to be accessible in one keyring file on the SID
+instance. You can either create this keyring file by importing exported public
+keys from a keyserver or using file-based ASCII-armored key definitions.
