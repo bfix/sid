@@ -155,11 +155,13 @@ func (s *HttpSrv) CanHandle (protocol string) bool {
  * @return bool - local address?
  */
 func (s *HttpSrv) IsAllowed (addr string) bool {
-	rc := strings.HasPrefix (addr, "127.0.0.1")
-	if !rc {
-		logger.Println (logger.WARN, "[sid.http] Invalid remote address '" + addr + "'") 
+	idx := strings.Index (addr, ":")
+	ip := addr[:idx]
+	if strings.Index (CfgData.HttpAllow, ip) == -1 {
+		logger.Println (logger.WARN, "[sid.http] Invalid remote address '" + addr + "'")
+		return false 
 	}
-	return rc
+	return true
 }
 
 //---------------------------------------------------------------------

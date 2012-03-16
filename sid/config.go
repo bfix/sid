@@ -43,7 +43,9 @@ type Config struct {
 	LogFile			string		// logging file name
 	LogState		bool		// use file-based logging?
 	CtrlPort		int			// port for control sessions
+	CtrlAllow		string		// addresses allowed for control sessions
 	HttpPort		int			// port for HTTP sessions
+	HttpAllow		string		// addresses allowed for HTTP access
 	Upload			UploadDefs	// upload-related settings
 }
 
@@ -68,7 +70,9 @@ var CfgData Config = Config {
 	LogFile:	"sid.log",		// default logging file
 	LogState:	false,			// no file-based logging
 	CtrlPort:	2342,			// port for local control service
+	CtrlAllow:	"127.0.0.1",	// addresses allowed to connect to control service
 	HttpPort:	80,				// expected port for HTTP connections
+	HttpAllow:	"127.0.0.1",	// addresses allowed to connect to HTTP server
 	
 	Upload:		UploadDefs {
 					Path:			"./uploads",
@@ -165,7 +169,9 @@ func callback (mode int, param *parser.Parameter) bool {
 				case "LogToFile":		CfgData.LogState = (param.Value == "ON")
 				case "LogLevel":		logger.SetLogLevelFromName (param.Value)
 				case "CrtlPort":		SetIntValue (&CfgData.CtrlPort, param.Value)
+				case "CrtlAllow":		CfgData.CtrlAllow = param.Value
 				case "HttpPort":		SetIntValue (&CfgData.HttpPort, param.Value)
+				case "HttpAllow":		CfgData.HttpAllow = param.Value
 				case "Path":			CfgData.Upload.Path = param.Value
 				case "Keyring":			CfgData.Upload.Keyring = param.Value
 				case "SharePrimeOfs":	SetIntValue (&CfgData.Upload.SharePrimeOfs, param.Value)

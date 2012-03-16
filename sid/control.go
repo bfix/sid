@@ -129,11 +129,13 @@ func (c *ControlSrv) CanHandle (protocol string) bool {
  * @return bool - local address?
  */
 func (c *ControlSrv) IsAllowed (addr string) bool {
-	rc := strings.HasPrefix (addr, "127.0.0.1")
-	if !rc {
+	idx := strings.Index (addr, ":")
+	ip := addr[:idx]
+	if strings.Index (CfgData.CtrlAllow, ip) == -1 {
 		logger.Println (logger.WARN, "[sid.ctrl] Unsupported remote address '" + addr + "'")
+		return false
 	}
-	return rc
+	return true
 }
 
 //---------------------------------------------------------------------
