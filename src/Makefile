@@ -9,8 +9,8 @@ endif
 ifneq ($(strip $(GOPATH)),)
 GOPKG := $(shell echo ${GOPATH} | cut -f 1 -d ':')
 GOPATH := ${GOPATH}:$(BASE)
-GOINST := cp -vr $(BASE)/pkg/* $(GOPKG)/pkg
-GOCLEAN := 	rm -rf ${GOPKG}/pkg/${GOOS}_${GOARCH}/gospel
+GOINST := cp -vr $(BASE)/pkg/* $(GOPKG)/pkg; cp -vr $(BASE)/bin/* $(GOPKG)/bin
+GOCLEAN := 	rm -f ${GOPKG}/pkg/${GOOS}_${GOARCH}/sid.a
 else
 GOPATH := $(BASE)
 GOPKG := $(BASE)
@@ -24,7 +24,7 @@ install:
 	$(GOINST)
 
 test:
-	GOPATH=${BASE}  go test ./...
+	go test ./...
 
 clean:
 	GOPATH=${BASE} go clean ./...
