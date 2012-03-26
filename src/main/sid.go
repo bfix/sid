@@ -29,9 +29,9 @@ package sid
 // Import external declarations.
 
 import (
-	"strconv"
-	"gospel/network"
 	"gospel/logger"
+	"gospel/network"
+	"strconv"
 )
 
 ///////////////////////////////////////////////////////////////////////
@@ -39,18 +39,18 @@ import (
  * Custom initialization method: Return cover instance to be used
  * to handle cover traffic
  */
-var CustomInitialization func () *Cover = nil
+var CustomInitialization func() *Cover = nil
 
 ///////////////////////////////////////////////////////////////////////
 // Main application start-up code.
 
-func Startup () {
+func Startup() {
 
-	logger.Println (logger.INFO, "[sid] ==============================")
-	logger.Println (logger.INFO, "[sid] SID v.01 -- Server In Disguise")
-	logger.Println (logger.INFO, "[sid] (c) 2012 Bernd R. Fix      >Y<")
-	logger.Println (logger.INFO, "[sid] ==============================")
-	
+	logger.Println(logger.INFO, "[sid] ==============================")
+	logger.Println(logger.INFO, "[sid] SID v.01 -- Server In Disguise")
+	logger.Println(logger.INFO, "[sid] (c) 2012 Bernd R. Fix      >Y<")
+	logger.Println(logger.INFO, "[sid] ==============================")
+
 	//-----------------------------------------------------------------
 	// Handle SID configuration: read configuration data from config
 	// file 'sid.cfg' in current directory (can be overridden by the
@@ -59,39 +59,39 @@ func Startup () {
 	// Configuration options used on the command line will override
 	// options defined in the config file (or default options). 
 	//-----------------------------------------------------------------
-	
+
 	// handle configuration file and command line options
 	// (turns on file-based logging if specified on command line) 
-	InitConfig ()
+	InitConfig()
 
 	//-----------------------------------------------------------------
 	//	Initialize cover-related settings
 	//-----------------------------------------------------------------
-	
-	InitDocumentHandler (CfgData.Upload)
-	
+
+	InitDocumentHandler(CfgData.Upload)
+
 	if CustomInitialization == nil {
-		logger.Println (logger.ERROR, "[sid] No custom initialization function defined -- aborting!")
+		logger.Println(logger.ERROR, "[sid] No custom initialization function defined -- aborting!")
 		return
 	}
 	cover := CustomInitialization()
-	
+
 	//-----------------------------------------------------------------
 	//	Start network services
 	//-----------------------------------------------------------------
 
 	// create control service.
-	ch := make (chan bool)
-	ctrl := &ControlSrv { ch }
-	
+	ch := make(chan bool)
+	ctrl := &ControlSrv{ch}
+
 	// create HTTP service
-	http := NewHttpSrv (cover)
-	
+	http := NewHttpSrv(cover)
+
 	// start network services
-	network.RunService ("tcp", ":" + strconv.Itoa(CfgData.CtrlPort), ctrl)
-	network.RunService ("tcp", ":" + strconv.Itoa(CfgData.HttpPort), http)
-	
+	network.RunService("tcp", ":"+strconv.Itoa(CfgData.CtrlPort), ctrl)
+	network.RunService("tcp", ":"+strconv.Itoa(CfgData.HttpPort), http)
+
 	// wait for termination
 	<-ch
-	logger.Println (logger.INFO, "[sid] Application terminated.")
+	logger.Println(logger.INFO, "[sid] Application terminated.")
 }

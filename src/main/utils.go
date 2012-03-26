@@ -23,9 +23,9 @@ package sid
 // Import external declarations.
 
 import (
-	"os"
-	"io"
 	"gospel/crypto"
+	"io"
+	"os"
 )
 
 ///////////////////////////////////////////////////////////////////////
@@ -36,18 +36,19 @@ import (
  * @param fname string - name of file
  * @param chunkSize int - max. size of data blobs for callback handler
  * @param hdlr func (data []byte) bool - callback handler
+ * @return error - error object (or nil)
  */
-func ProcessFile (fname string, chunkSize int, hdlr func (data []byte) bool) os.Error {
+func ProcessFile(fname string, chunkSize int, hdlr func(data []byte) bool) error {
 
 	// open file
-	file,err := os.Open (fname)
+	file, err := os.Open(fname)
 	if err != nil {
 		return err
 	}
 	defer file.Close()
-	
+
 	// process content
-	return ProcessStream (file, chunkSize, hdlr)
+	return ProcessStream(file, chunkSize, hdlr)
 }
 
 ///////////////////////////////////////////////////////////////////////
@@ -58,14 +59,15 @@ func ProcessFile (fname string, chunkSize int, hdlr func (data []byte) bool) os.
  * @param rdr io.Reader - source reader
  * @param chunkSize int - max. size of data blobs for callback handler
  * @param hdlr func (data []byte) bool - callback handler
+ * @return error - error object (or nil)
  */
-func ProcessStream (rdr io.Reader, chunkSize int, hdlr func (data []byte) bool) os.Error {
+func ProcessStream(rdr io.Reader, chunkSize int, hdlr func(data []byte) bool) error {
 
 	// process file	
-	data := make ([]byte, chunkSize)
+	data := make([]byte, chunkSize)
 	for {
 		// read next chunk
-		n,err := rdr.Read (data)
+		n, err := rdr.Read(data)
 		// end of file reached?
 		if n == 0 {
 			// yes: done
@@ -76,10 +78,10 @@ func ProcessStream (rdr io.Reader, chunkSize int, hdlr func (data []byte) bool) 
 			return err
 		}
 		// let callback handle the data
-		if !hdlr (data) {
+		if !hdlr(data) {
 			break
 		}
-	} 
+	}
 	// report success.
 	return nil
 }
@@ -90,10 +92,10 @@ func ProcessStream (rdr io.Reader, chunkSize int, hdlr func (data []byte) bool) 
  * @param size int - desired length of identifier
  * @return string - generated number string
  */
-func CreateId (size int) string {
-	id := string('1' + crypto.RandInt (0,8))
+func CreateId(size int) string {
+	id := string('1' + crypto.RandInt(0, 8))
 	for len(id) < size {
-		id += string('0' + crypto.RandInt (0,9))
+		id += string('0' + crypto.RandInt(0, 9))
 	}
 	return id
 }

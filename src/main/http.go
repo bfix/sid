@@ -26,9 +26,9 @@ package sid
 // Import external declarations.
 
 import (
+	"gospel/logger"
 	"net"
 	"strings"
-	"gospel/logger"
 )
 
 ///////////////////////////////////////////////////////////////////////
@@ -39,8 +39,8 @@ import (
  * Cover server instance available that is shared among all HTTP
  * go-routines.
  */
-type HttpSrv struct  {
-	hndlr		*Cover		// cover server reference
+type HttpSrv struct {
+	hndlr *Cover // cover server reference
 }
 
 ///////////////////////////////////////////////////////////////////////
@@ -48,10 +48,10 @@ type HttpSrv struct  {
  * Create and initialize new HTTP service instance
  * @param cover *Cover - refderence to cover server instance
  */
-func NewHttpSrv (cover *Cover) *HttpSrv {
-	return &HttpSrv {
+func NewHttpSrv(cover *Cover) *HttpSrv {
+	return &HttpSrv{
 		//	Instantiate Cover (content transformer)
-		hndlr:	cover,
+		hndlr: cover,
 	}
 }
 
@@ -62,37 +62,33 @@ func NewHttpSrv (cover *Cover) *HttpSrv {
  * Handle client connection.
  * @param client net.Conn - connection to client
  */
-func (s *HttpSrv) Process (client net.Conn) {
+func (s *HttpSrv) Process(client net.Conn) {
 
 	// close client connection on function exit
 	defer client.Close()
 
 	// allocate buffer
-	data := make ([]byte, 32768)
-	
+	data := make([]byte, 32768)
+
 	// open a new connection to the cover server
-	cover := s.hndlr.connect ()
+	cover := s.hndlr.connect()
 	if cover == nil {
 		// failed to open connection to cover server
 		return
 	}
 	// close connection to cover server on exit
-	defer s.hndlr.disconnect (cover)
+	defer s.hndlr.disconnect(cover)
 	// get associated state info
-	state := s.hndlr.GetState (cover)
+	state := s.hndlr.GetState(cover)
 
-	// don't block read/write operations on socket buffers
-	client.SetTimeout (1)
-	cover.SetTimeout (1)
-	
 	// handle session loop
 	for {
 		//-------------------------------------------------------------
 		//	Upstream message passing
 		//-------------------------------------------------------------
-		
+
 		// get data from cover server.
-		n,ok := rcvData (cover, data, "http")
+		n, ok := rcvData(cover, data, "http")
 		if !ok {
 			// epic fail: terminate session
 			return
@@ -100,11 +96,11 @@ func (s *HttpSrv) Process (client net.Conn) {
 		// send pending response to client
 		if n > 0 {
 			// transform response
-			resp := s.hndlr.xformResp (state, data, n) 
+			resp := s.hndlr.xformResp(state, data, n)
 			// send incoming response data to client
-			if !sendData (client, resp, "http") {
+			if !sendData(client, resp, "http") {
 				// terminate session on failure
-				logger.Println (logger.ERROR, "[sid.http] Failed to send data to client.")
+				logger.Println(logger.ERROR, "[sid.http] Failed to send data to client.")
 				return
 			}
 		}
@@ -112,9 +108,9 @@ func (s *HttpSrv) Process (client net.Conn) {
 		//-------------------------------------------------------------
 		//	Downstream message passing
 		//-------------------------------------------------------------
-				
+
 		// get data from client.
-		n,ok = rcvData (client, data, "http")
+		n, ok = rcvData(client, data, "http")
 		if !ok {
 			// epic fail: terminate session
 			return
@@ -122,11 +118,11 @@ func (s *HttpSrv) Process (client net.Conn) {
 		// send pending client request
 		if n > 0 {
 			// transform request
-			req := s.hndlr.xformReq (state, data, n)
+			req := s.hndlr.xformReq(state, data, n)
 			// send request to cover server
-			if !sendData (cover, req, "http") {
+			if !sendData(cover, req, "http") {
 				// terminate session on failure
-				logger.Println (logger.ERROR, "[sid.http] Failed to send data to cover.")
+				logger.Println(logger.ERROR, "[sid.http] Failed to send data to cover.")
 				return
 			}
 		}
@@ -139,12 +135,12 @@ func (s *HttpSrv) Process (client net.Conn) {
  * @param protocol string - connection protocol
  * @return bool - protcol handled?
  */
-func (s *HttpSrv) CanHandle (protocol string) bool {
-	rc := strings.HasPrefix (protocol, "tcp")
+func (s *HttpSrv) CanHandle(protocol string) bool {
+	rc := strings.HasPrefix(protocol, "tcp")
 	if !rc {
-		logger.Println (logger.INFO, "[sid.http] Unsupported protocol '" + protocol + "'") 
+		logger.Println(logger.INFO, "[sid.http] Unsupported protocol '"+protocol+"'")
 	}
-	return rc 
+	return rc
 }
 
 //---------------------------------------------------------------------
@@ -154,12 +150,12 @@ func (s *HttpSrv) CanHandle (protocol string) bool {
  * @param add string - remote address
  * @return bool - local address?
  */
-func (s *HttpSrv) IsAllowed (addr string) bool {
-	idx := strings.Index (addr, ":")
+func (s *HttpSrv) IsAllowed(addr string) bool {
+	idx := strings.Index(addr, ":")
 	ip := addr[:idx]
-	if strings.Index (CfgData.HttpAllow, ip) == -1 {
-		logger.Println (logger.WARN, "[sid.http] Invalid remote address '" + addr + "'")
-		return false 
+	if strings.Index(CfgData.HttpAllow, ip) == -1 {
+		logger.Println(logger.WARN, "[sid.http] Invalid remote address '"+addr+"'")
+		return false
 	}
 	return true
 }
