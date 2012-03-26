@@ -26,9 +26,10 @@ package main
 import (
 	"fmt"
 	"flag"
+	"io"
 	"os"
 	"bufio"
-	"big"
+	"math/big"
 	"strings"
 	"crypto/aes"
 	"crypto/cipher"
@@ -58,7 +59,7 @@ func main() {
 		f,err := os.Open (args[n])
 		if err != nil {
 			fmt.Printf  ("Failed to open file '%s' -- abort!\n", args[n])
-			fmt.Println ("Error: " + err.String())
+			fmt.Println ("Error: " + err.Error())
 			os.Exit (1)
 		}
 		rdr := bufio.NewReader (f)
@@ -75,16 +76,15 @@ func main() {
 	engine,err := aes.NewCipher (key)
 	if err != nil {
 		fmt.Println  ("Failed to create AES cipher engine -- abort!")
-		fmt.Println ("Error: " + err.String())
+		fmt.Println ("Error: " + err.Error())
 		os.Exit (1)
 	}
-	engine.Reset()	
 	
 	// decrypt document
 	rdr,err := os.Open (args[0])
 	if err != nil {
 		fmt.Printf  ("Failed to open file '%s' -- abort!\n", args[0])
-		fmt.Println ("Error: " + err.String())
+		fmt.Println ("Error: " + err.Error())
 		os.Exit (1)
 	}
 	defer rdr.Close()
@@ -97,7 +97,7 @@ func main() {
 	wrt,err := os.OpenFile (fname, os.O_WRONLY | os.O_CREATE | os.O_TRUNC, 0666)
 	if err != nil {
 		fmt.Printf  ("Failed to open output file '%s' -- abort!\n", fname)
-		fmt.Println ("Error: " + err.String())
+		fmt.Println ("Error: " + err.Error())
 		os.Exit (1)
 	}
 	defer wrt.Close()
@@ -111,18 +111,18 @@ func main() {
 	for {
 		num,err := rdr.Read (data)
 		if err != nil {
-			if err == os.EOF {
+			if err == io.EOF {
 				break
 			}
 			fmt.Printf  ("Failed to read encrypted file '%s' -- abort!\n", args[0])
-			fmt.Println ("Error: " + err.String())
+			fmt.Println ("Error: " + err.Error())
 			os.Exit (1)
 		}
 		dec.XORKeyStream (data[0:num], data[0:num])
 		num,err = wrt.Write (data[0:num])
 		if err != nil {
 			fmt.Printf  ("Failed to write decrypted file '%s' -- abort!\n", fname)
-			fmt.Println ("Error: " + err.String())
+			fmt.Println ("Error: " + err.Error())
 			os.Exit (1)
 		}
 	}			
@@ -136,7 +136,7 @@ func GetLine (rdr *bufio.Reader, fname string) string {
 	line,_,err := rdr.ReadLine()
 	if err != nil {
 		fmt.Printf  ("Failed to read from file '%s' -- abort!\n", fname)
-		fmt.Println ("Error: " + err.String())
+		fmt.Println ("Error: " + err.Error())
 		os.Exit (1)
 	}
 	return string(line)
