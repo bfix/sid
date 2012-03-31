@@ -19,14 +19,17 @@ GOCLEAN :=
 endif
 
 install:
-	echo $(GOPATH)
-	go install ./...
+	@echo GOPATH=$(GOPATH)
+	$(MAKE) -C sid install
+	$(MAKE) -C dcd install
 	$(GOINST)
 
 test:
-	go test ./...
+	GOPATH=${BASE} $(MAKE) -C sid test
+	GOPATH=${BASE} $(MAKE) -C dcd test
 
 clean:
-	GOPATH=${BASE} go clean ./...
+	GOPATH=${BASE} $(MAKE) -C sid clean
+	GOPATH=${BASE} $(MAKE) -C dcd clean
 	rm -rf $(BASE)/pkg
 	$(GOCLEAN)
