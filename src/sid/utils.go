@@ -78,7 +78,7 @@ func ProcessStream(rdr io.Reader, chunkSize int, hdlr func(data []byte) bool) er
 			return err
 		}
 		// let callback handle the data
-		if !hdlr(data) {
+		if !hdlr(data[:n]) {
 			break
 		}
 	}
