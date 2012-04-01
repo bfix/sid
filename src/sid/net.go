@@ -36,7 +36,7 @@ const (
 	retries = 1000    // max. 1s
 )
 
-var timeout,_ = time.ParseDuration("1ns") // 1ns
+var timeout,_ = time.ParseDuration("100us") // 0.1ms
 
 ///////////////////////////////////////////////////////////////////////
 // Public functions
