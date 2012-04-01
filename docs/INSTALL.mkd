@@ -15,7 +15,9 @@ To install GO on your computer you must have the usual C Compiler tools
 installed; on Debian this requires the packages *awk*, *bison*, *gcc* and
 *make* (see <http://golang.org/doc/install.html#ctools> for more info) and a
 working "Mercurial" (source control management software) on your box (for more
-info see <http://golang.org/doc/install.html#mercurial>).
+info see <http://golang.org/doc/install.html#mercurial>). You need to install
+the current TIP release of Go1 for this archive to compile correctly.
+
 
 Use a directory of your choice (I recommend to use the `/opt` directory
 if you are allowed to create sub-directories under `/opt`) and then to
@@ -25,7 +27,7 @@ repository and compile and test it:
 	$ cd /opt
 	$ hg clone https://go.googlecode.com/hg/ go
 	$ cd go
-	$ hg update release
+	$ hg update tip
 	$ cd src
 	$ ./all.bash
 
@@ -35,7 +37,7 @@ to a start-up file (like `.bashrc`) after you changed it to match your soft-
 and hardware environment:
 
 	export GOOS=linux
-	export GOARCH=386
+	export GOARCH=amd64
 	export GOROOT=/opt/go
 	export PATH=${PATH}:${GOROOT}/bin
 
@@ -51,18 +53,14 @@ the required GOSPEL packages for SID on your computer, you need a working
 	$ cd gospel/src
 	$ make install
 
-N.B.: Because of dependencies you must run `make install` first before you
-can run `make` later (if required after code changes in the library).
-
 Building and installing the SID library
 ---------------------------------------
 
 To build and install the SID framework package, change into the source
 directory and build/install the target:
 
-	$ cd sid
+	$ cd src
 	$ make install
 
-The library is named 'sid.a' and resides in the package directory of the
-GO installation on your machine. It can then be used to build custom SID
-applications.
+The compiled SID library can be used by customized SID applications.
+ 
