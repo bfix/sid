@@ -18,15 +18,14 @@ working "Mercurial" (source control management software) on your box (for more
 info see <http://golang.org/doc/install.html#mercurial>). You need to install
 the current TIP release of Go1 for this archive to compile correctly.
 
-
-Use a directory of your choice (I recommend to use the `/opt` directory
-if you are allowed to create sub-directories under `/opt`) and then to
+Use a directory of your choice (I recommend to use the `/opt/go` directory
+if you are allowed to create sub-directories under `/opt/go`) and then to
 change into this directory. Next you fetch a snapshot of the GO
 repository and compile and test it:
 
-	$ cd /opt
-	$ hg clone https://go.googlecode.com/hg/ go
-	$ cd go
+	$ cd /opt/go
+	$ hg clone https://code.google.com/p/go golang
+	$ cd golang
 	$ hg update tip
 	$ cd src
 	$ ./all.bash
@@ -38,8 +37,29 @@ and hardware environment:
 
 	export GOOS=linux
 	export GOARCH=amd64
-	export GOROOT=/opt/go
+	export GOROOT=/opt/go/golang
 	export PATH=${PATH}:${GOROOT}/bin
+	
+#### GO1 sub-repositories
+
+With the release of Go1 some code needed by SID has been moved into sub-
+repositories. At least the 'go.crypto' sub-repository must be installed
+locally:
+
+	$ cd /opt/go/libs
+	$ mkdir -p sub/code.google.com/p
+	$ cd sub/code.google.com/p
+	$ hg clone https://code.google.com/p/go.crypto
+	$ cd ../..
+	$ go install -v ./... 
+
+Make sure you set a GOPATH variable to the sub-repository:
+
+	$ export GOPATH=/opt/go/libs/sub
+	
+N.B.: If you want to instalkl further Go1 sub-repositories, I recommend to
+put them under the same base directory (/opt/go/libs/sub) so you don't need
+additional GOPATH elments and have all Google GO libraries in one place.
 
 ### GOSPEL
 
@@ -47,11 +67,15 @@ GOSPEL is the "GO SPEcial Library" and an Open-Source project. To install
 the required GOSPEL packages for SID on your computer, you need a working
 *git* installation; then simply issue the following commands:
 
-	$ mkdir /opt/go-libs
-	$ cd /opt/go-libs
+	$ mkdir /opt/go/libs
+	$ cd /opt/go/libs
 	$ git clone git://github.com/bfix/gospel gospel
 	$ cd gospel/src
 	$ make install
+	
+Don't forget to extend the the GOPATH variable to include the GOSPEL project:
+
+	$ export GOPATH=${GOPATH}:/opt/go/libs/gospel 
 
 Building and installing the SID library
 ---------------------------------------
