@@ -66,6 +66,12 @@ options available in the template file:
 	
 	You will be presented with a control menu to perform various maintenance
 	tasks like shutting down a running SID instance.
+	
+* 'CtrlAllow = 127.0.0.1,'
+
+	Specifies the IP address(es) that can connect to the control server
+	instance; only direct IP addresses (no domain names or netmasks are
+	allowed as parameter)
 
 ### SID port 
 
@@ -73,6 +79,12 @@ options available in the template file:
 
 	This defines the port the SID instance is listening on for HTTP client
 	traffic.
+
+* 'HttpAllow = 127.0.0.1,'
+
+	Specifies the IP address(es) that can connect to the SID server	instance;
+	only direct IP addresses (no domain names or netmasks are allowed as
+	parameter)
 
 ### Upload - related settings
 
