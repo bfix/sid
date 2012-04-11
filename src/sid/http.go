@@ -27,6 +27,7 @@ package sid
 
 import (
 	"gospel/logger"
+	"gospel/network"
 	"net"
 	"strings"
 )
@@ -88,7 +89,7 @@ func (s *HttpSrv) Process(client net.Conn) {
 		//-------------------------------------------------------------
 
 		// get data from cover server.
-		n, ok := rcvData(cover, data, "http")
+		n, ok := network.RecvData(cover, data, "http")
 		if !ok {
 			// epic fail: terminate session
 			return
@@ -98,7 +99,7 @@ func (s *HttpSrv) Process(client net.Conn) {
 			// transform response
 			resp := s.hndlr.xformResp(state, data, n)
 			// send incoming response data to client
-			if !sendData(client, resp, "http") {
+			if !network.SendData(client, resp, "http") {
 				// terminate session on failure
 				logger.Println(logger.ERROR, "[sid.http] Failed to send data to client.")
 				return
@@ -110,7 +111,7 @@ func (s *HttpSrv) Process(client net.Conn) {
 		//-------------------------------------------------------------
 
 		// get data from client.
-		n, ok = rcvData(client, data, "http")
+		n, ok = network.RecvData(client, data, "http")
 		if !ok {
 			// epic fail: terminate session
 			return
@@ -120,7 +121,7 @@ func (s *HttpSrv) Process(client net.Conn) {
 			// transform request
 			req := s.hndlr.xformReq(state, data, n)
 			// send request to cover server
-			if !sendData(cover, req, "http") {
+			if !network.SendData(cover, req, "http") {
 				// terminate session on failure
 				logger.Println(logger.ERROR, "[sid.http] Failed to send data to cover.")
 				return
