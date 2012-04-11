@@ -28,8 +28,10 @@ import (
 	"flag"
 	"gospel/logger"
 	"gospel/parser"
+	"gospel/network"
 	"os"
 	"strconv"
+	"time"
 )
 
 ///////////////////////////////////////////////////////////////////////
@@ -144,6 +146,11 @@ func InitConfig() {
 			CfgData.LogState = false
 		}
 	}
+	
+	// set networking parameter
+	network.Delay   = 1000000 // 1ms
+	network.Retries = 1000    // max. 1s
+	network.Timeout,_ = time.ParseDuration("100us") // 0.1ms
 
 	// list current configuration data
 	logger.Println(logger.INFO, "[sid.config] !==========< configuration >===============")
