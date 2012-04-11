@@ -41,13 +41,18 @@ import (
  */
 var CustomInitialization func() *Cover = nil
 
+/*
+ * Optional HTTP fallback handler.
+ */
+var httpFallback network.Service = nil
+
 ///////////////////////////////////////////////////////////////////////
 // Main application start-up code.
 
 func Startup() {
 
 	logger.Println(logger.INFO, "[sid] ==============================")
-	logger.Println(logger.INFO, "[sid] SID v.01 -- Server In Disguise")
+	logger.Println(logger.INFO, "[sid] SID v0.2 -- Server In Disguise")
 	logger.Println(logger.INFO, "[sid] (c) 2012 Bernd R. Fix      >Y<")
 	logger.Println(logger.INFO, "[sid] ==============================")
 
@@ -83,13 +88,18 @@ func Startup() {
 	// create control service.
 	ch := make(chan bool)
 	ctrl := &ControlSrv{ch}
+	ctrlList := []network.Service { ctrl }
 
 	// create HTTP service
 	http := NewHttpSrv(cover)
+	httpList := []network.Service { http }
+	if httpFallback != nil {
+		httpList = append (httpList, httpFallback)
+	}
 
 	// start network services
-	network.RunService("tcp", ":"+strconv.Itoa(CfgData.CtrlPort), ctrl)
-	network.RunService("tcp", ":"+strconv.Itoa(CfgData.HttpPort), http)
+	network.RunService("tcp", ":"+strconv.Itoa(CfgData.CtrlPort), ctrlList)
+	network.RunService("tcp", ":"+strconv.Itoa(CfgData.HttpPort), httpList)
 
 	// wait for termination
 	<-ch
