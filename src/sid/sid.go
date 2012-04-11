@@ -44,7 +44,7 @@ var CustomInitialization func() *Cover = nil
 /*
  * Optional HTTP fallback handler.
  */
-var httpFallback network.Service = nil
+var HttpFallback network.Service = nil
 
 ///////////////////////////////////////////////////////////////////////
 // Main application start-up code.
@@ -93,8 +93,8 @@ func Startup() {
 	// create HTTP service
 	http := NewHttpSrv(cover)
 	httpList := []network.Service { http }
-	if httpFallback != nil {
-		httpList = append (httpList, httpFallback)
+	if HttpFallback != nil {
+		httpList = append (httpList, HttpFallback)
 	}
 
 	// start network services
