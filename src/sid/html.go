@@ -149,11 +149,12 @@ func (t *TagList) Count() int {
  * eavesdropper. This function adds to an existing list of resources (from
  * a previous cover server response).
  * @param rdr *io.Reader - buffered reader for parsing
- * @param links *TagList - (current) list of inline ressources (header)
- * @param list *TagList - (current) list of inline ressources (body)
+ * @param links *TagList - (current) list of inline resources (header)
+ * @param list *TagList - (current) list of inline resources (body)
+ * @param xtra *TagList - (current) list of inline resources (special interest tags)
  * @return bool - end of parsing (HTML closed)?
  */
-func parseHTML(rdr io.Reader, links *TagList, list *TagList) bool {
+func parseHTML(rdr io.Reader, links *TagList, list *TagList, xtra *TagList) bool {
 
 	// try to use GO html tokenizer to parse the content
 	tk := html.NewTokenizer(rdr)
@@ -226,10 +227,13 @@ loop:
 		case tag.name == "link":
 			links.Put(tag)
 			logger.Println(logger.DBG, "[sid.html] hdr => "+tag.String())
-			/*					
-				default:
-					logger.Println (logger.DBG_ALL, "*** " + tag.String())
-			*/
+
+		case tag.name == "input" && tag.attrs["type"] == "hidden":
+			xtra.Put(tag)
+			logger.Println(logger.DBG, "[sid.html] xtra => "+tag.String())
+
+			//		default:
+			//			logger.Println (logger.DBG_ALL, "*** " + tag.String())
 		}
 	}
 	return closed
