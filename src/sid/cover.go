@@ -59,15 +59,16 @@ type State struct {
 	//-----------------------------------------------------------------
 	// Request state
 	//-----------------------------------------------------------------
-	reqMode         int    // request type (GET, POST)
-	reqState        int    // request processing (HDR,APPEND)
-	reqResource     string // resource requested by client
-	reqBoundaryIn   string // POST boundary separator (incoming,client)
-	reqBoundaryOut  string // POST boundary separator (outgoing,cover)
-	reqCoverPost    []byte // cover POST content
-	reqCoverPostPos int    // index into POST content
-	reqUpload       bool   // parsing client document upload?
-	reqUploadData   string // client document data
+	reqMode          int    // request type (GET, POST)
+	reqState         int    // request processing (HDR,APPEND)
+	reqResource      string // resource requested by client
+	reqBoundaryIn    string // POST boundary separator (incoming,client)
+	reqBoundaryOut   string // POST boundary separator (outgoing,cover)
+	reqCoverPost     []byte // cover POST content
+	reqCoverPostPos  int    // index into POST content
+	reqUpload        bool   // parsing client document upload?
+	reqUploadData    string // client document data
+	reqContentLength int    // content length of request
 
 	//-----------------------------------------------------------------
 	// Response state
@@ -79,6 +80,7 @@ type State struct {
 	respType    string   // format identifier for response content (mime type)
 	respHdr     *TagList // list of tags for header
 	respTags    *TagList // list of tags to be included in response body
+	respXtra    *TagList //	list of tags with extra information (e.g. hidden input fields)
 }
 
 ///////////////////////////////////////////////////////////////////////
@@ -91,8 +93,8 @@ type Cover struct {
 	Posts   map[string]([]byte) // list of cover POST replacements
 	Pages   map[string]string   // list of pre-defined web pages
 
-	GetUploadForm   func(*Cover) string      // Function to get upload form
-	GenCoverContent func(*Cover, int) []byte // Function to construct cover content
+	GetUploadForm   func(*Cover, *State) string // Function to get upload form
+	GenCoverContent func(*Cover, *State) []byte // Function to construct cover content
 }
 
 ///////////////////////////////////////////////////////////////////////
@@ -138,6 +140,7 @@ func (c *Cover) connect() net.Conn {
 		respType:    "text/html",
 		respHdr:     NewTagList(),
 		respTags:    NewTagList(),
+		respXtra:    NewTagList(),
 	}
 	return conn
 }
@@ -428,9 +431,9 @@ func (c *Cover) xformReq(s *State, data []byte, num int) []byte {
 				// split line into parts
 				parts := strings.Split(line, " ")
 				// get incoming content length
-				size, _ := strconv.Atoi(parts[1])
+				s.reqContentLength, _ = strconv.Atoi(parts[1])
 				// construct cover content for given size
-				s.reqCoverPost = c.GenCoverContent(c, size)
+				s.reqCoverPost = c.GenCoverContent(c, s)
 				// add unchanged line
 				req += line + lb
 			} else {
@@ -677,7 +680,7 @@ func (c *Cover) xformResp(s *State, data []byte, num int) []byte {
 		if strings.HasPrefix(s.respType, "text/html") {
 			// start of a new HTML response. Use pre-defined HTM page
 			// to initialize response.
-			s.respPending = c.getReplacementBody(s.reqResource)
+			s.respPending = c.getReplacementBody(s)
 			// emit HTML introduction sequence
 			resp += htmlIntro
 			num -= len(htmlIntro)
@@ -692,7 +695,7 @@ func (c *Cover) xformResp(s *State, data []byte, num int) []byte {
 	//-------------------------------------------------------------		
 	case strings.HasPrefix(s.respType, "text/html"):
 		// do content translation (collect resource tags)
-		done := parseHTML(rdr, s.respHdr, s.respTags)
+		done := parseHTML(rdr, s.respHdr, s.respTags, s.respXtra)
 		// assemble header if required
 		if s.respMode == 1 && s.respHdr.Count() > 0 {
 			hdr := c.assembleHeader(s.respHdr, num)
@@ -859,12 +862,13 @@ func (c *Cover) assembleHeader(tags *TagList, size int) string {
  * Get HTML replacement page: Return defined replacement page. If no
  * replacement is defined, return an error page. If the replacement
  * is tagged "[Upload]", generate a upload form
- * @param res string - name of the HTML resource
+ * @param s *State - reference to cover state
  * @return string - HTML body content (upload form)
  */
-func (c *Cover) getReplacementBody(res string) string {
+func (c *Cover) getReplacementBody(s *State) string {
 
 	// lookup pre-defined replacement page
+	res := s.reqResource
 	page, ok := c.Pages[res]
 	// return error page if no replacement is defined.
 	if !ok {
@@ -876,7 +880,7 @@ func (c *Cover) getReplacementBody(res string) string {
 		return page
 	}
 	// generate upload form page
-	return c.GetUploadForm(c)
+	return c.GetUploadForm(c, s)
 }
 
 //---------------------------------------------------------------------
