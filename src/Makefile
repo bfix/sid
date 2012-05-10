@@ -12,7 +12,7 @@ else
 GOPATH := $(BASE)
 endif
 
-install:
+install:	fmt
 	GOPATH=$(GOPATH) go install -v ./...
 
 test:
@@ -20,3 +20,6 @@ test:
 
 clean:
 	go clean -i ./...
+	
+fmt:
+	go fmt ./...
