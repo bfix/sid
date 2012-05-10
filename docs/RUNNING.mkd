@@ -121,6 +121,9 @@ options available in the template file:
 	to decrypt and access uploaded client documents. This number must be at
 	least `1` and must be less or equal to the number of keys in the public
 	keyring.
+	
+	To disable the secret sharing scheme you can specify a treshold of "0";
+	this will store incoming document uploads unencrypted in the upload folder.
 
 
 Building a public keyring for reviewer keys
