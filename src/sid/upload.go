@@ -57,27 +57,32 @@ func InitDocumentHandler(defs UploadDefs) {
 	uploadPath = defs.Path
 	treshold = defs.ShareTreshold
 
-	// compute prime: (2^512-1) - SharePrimeOfs
-	one := big.NewInt(1)
-	ofs := big.NewInt(int64(defs.SharePrimeOfs))
-	prime = new(big.Int).Lsh(one, 512)
-	prime = new(big.Int).Sub(prime, one)
-	prime = new(big.Int).Sub(prime, ofs)
-
-	// open keyring file
-	rdr, err := os.Open(defs.Keyring)
-	if err != nil {
-		// can't read keys -- terminate!
-		logger.Printf(logger.ERROR, "[sid.upload] Can't read keyring file '%s' -- terminating!\n", defs.Keyring)
-		os.Exit(1)
-	}
-	defer rdr.Close()
-
-	// read public keys from keyring
-	if reviewer, err = openpgp.ReadKeyRing(rdr); err != nil {
-		// can't read keys -- terminate!
-		logger.Printf(logger.ERROR, "[sid.upload] Failed to process keyring '%s' -- terminating!\n", defs.Keyring)
-		os.Exit(1)
+	// check for disabled secret sharing scheme
+	if treshold > 0 {
+		// compute prime: (2^512-1) - SharePrimeOfs
+		one := big.NewInt(1)
+		ofs := big.NewInt(int64(defs.SharePrimeOfs))
+		prime = new(big.Int).Lsh(one, 512)
+		prime = new(big.Int).Sub(prime, one)
+		prime = new(big.Int).Sub(prime, ofs)
+	
+		// open keyring file
+		rdr, err := os.Open(defs.Keyring)
+		if err != nil {
+			// can't read keys -- terminate!
+			logger.Printf(logger.ERROR, "[sid.upload] Can't read keyring file '%s' -- terminating!\n", defs.Keyring)
+			os.Exit(1)
+		}
+		defer rdr.Close()
+	
+		// read public keys from keyring
+		if reviewer, err = openpgp.ReadKeyRing(rdr); err != nil {
+			// can't read keys -- terminate!
+			logger.Printf(logger.ERROR, "[sid.upload] Failed to process keyring '%s' -- terminating!\n", defs.Keyring)
+			os.Exit(1)
+		}
+	} else {
+		logger.Printf(logger.WARN, "[sid.upload] Secret sharing scheme disabled -- uploads will be stored unencrypted!!")
 	}
 }
 
@@ -88,92 +93,108 @@ func InitDocumentHandler(defs UploadDefs) {
  * @return bool - post-processing successful?
  */
 func PostprocessUploadData(data []byte) bool {
+
 	logger.Println(logger.INFO, "[sid.upload] Client upload received")
 	logger.Println(logger.DBG_ALL, "[sid.upload] Client upload data:\n"+string(data))
 
-	var (
-		err    error
-		engine cipher.Block   = nil
-		wrt    io.WriteCloser = nil
-		ct     io.WriteCloser = nil
-		pt     io.WriteCloser = nil
-	)
-
 	baseName := uploadPath + "/" + CreateId(16)
 
-	//-----------------------------------------------------------------
-	// setup AES-256 for encryption
-	//-----------------------------------------------------------------
-	key := crypto.RandBytes(32)
-	if engine, err = aes.NewCipher(key); err != nil {
-		// should not happen at all; epic fail if it does
-		logger.Println(logger.ERROR, "[sid.upload] Failed to setup AES cipher!")
-		return false
-	}
-	bs := engine.BlockSize()
-	iv := crypto.RandBytes(bs)
-	enc := cipher.NewCFBEncrypter(engine, iv)
-
-	logger.Println(logger.DBG_ALL, "[sid.upload] key:\n"+hex.Dump(key))
-	logger.Println(logger.DBG_ALL, "[sid.upload] IV:\n"+hex.Dump(iv))
-
-	//-----------------------------------------------------------------
-	// encrypt client document into file
-	//-----------------------------------------------------------------
-
-	// open file for output 
-	fname := baseName + ".document.aes256"
-	if wrt, err = os.OpenFile(fname, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0666); err != nil {
-		logger.Printf(logger.ERROR, "[sid.upload] Can't create document file '%s'\n", fname)
-		return false
-	}
-	// write iv first
-	wrt.Write(iv)
-	// encrypt binary data for the document
-	logger.Println(logger.DBG_ALL, "[sid.upload] AES256 in:\n"+hex.Dump(data))
-	enc.XORKeyStream(data, data)
-	logger.Println(logger.DBG_ALL, "[sid.upload] AES256 out:\n"+hex.Dump(data))
-	// write to file
-	wrt.Write(data)
-	wrt.Close()
-
-	//-----------------------------------------------------------------
-	//	create shares from secret
-	//-----------------------------------------------------------------
-	secret := new(big.Int).SetBytes(key)
-	n := len(reviewer)
-	shares := crypto.Split(secret, prime, n, treshold)
-	recipient := make([]*openpgp.Entity, 1)
-
-	for i, ent := range reviewer {
-		// generate filename based on key id
-		id := strconv.FormatUint(ent.PrimaryKey.KeyId&0xFFFFFFFF, 16)
-		fname = baseName + "." + strings.ToUpper(id) + ".gpg"
-		// create file for output
+	// check if we use a shared secret scheme
+	if reviewer == nil {
+		// no: store content unencrypted.
+		fname := baseName + ".document"
+		wrt, err := os.OpenFile(fname, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0666)
+		if err != nil {
+			logger.Printf(logger.ERROR, "[sid.upload] Can't create document file '%s'\n", fname)
+			return false
+		}
+		// write content and close file
+		wrt.Write(data)
+		wrt.Close()
+	} else {
+		// yes: use shared secret scheme to store upload in encrypted form.
+		var (
+			err    error
+			engine cipher.Block   = nil
+			wrt    io.WriteCloser = nil
+			ct     io.WriteCloser = nil
+			pt     io.WriteCloser = nil
+		)
+	
+		//-----------------------------------------------------------------
+		// setup AES-256 for encryption
+		//-----------------------------------------------------------------
+		key := crypto.RandBytes(32)
+		if engine, err = aes.NewCipher(key); err != nil {
+			// should not happen at all; epic fail if it does
+			logger.Println(logger.ERROR, "[sid.upload] Failed to setup AES cipher!")
+			return false
+		}
+		bs := engine.BlockSize()
+		iv := crypto.RandBytes(bs)
+		enc := cipher.NewCFBEncrypter(engine, iv)
+	
+		logger.Println(logger.DBG_ALL, "[sid.upload] key:\n"+hex.Dump(key))
+		logger.Println(logger.DBG_ALL, "[sid.upload] IV:\n"+hex.Dump(iv))
+	
+		//-----------------------------------------------------------------
+		// encrypt client document into file
+		//-----------------------------------------------------------------
+	
+		// open file for output 
+		fname := baseName + ".document.aes256"
 		if wrt, err = os.OpenFile(fname, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0666); err != nil {
-			logger.Printf(logger.ERROR, "[sid.upload] Can't create share file '%s'\n", fname)
-			continue
+			logger.Printf(logger.ERROR, "[sid.upload] Can't create document file '%s'\n", fname)
+			return false
 		}
-		// create PGP armorer
-		if ct, err = armor.Encode(wrt, "PGP MESSAGE", nil); err != nil {
-			logger.Printf(logger.ERROR, "[sid.upload] Can't create armorer: %s\n", err.Error())
-			wrt.Close()
-			continue
-		}
-		// encrypt share to file	
-		recipient[0] = ent
-		if pt, err = openpgp.Encrypt(ct, recipient, nil, nil, nil); err != nil {
-			logger.Printf(logger.ERROR, "[sid.upload] Can't create encrypter: %s\n", err.Error())
+		// write iv first
+		wrt.Write(iv)
+		// encrypt binary data for the document
+		logger.Println(logger.DBG_ALL, "[sid.upload] AES256 in:\n"+hex.Dump(data))
+		enc.XORKeyStream(data, data)
+		logger.Println(logger.DBG_ALL, "[sid.upload] AES256 out:\n"+hex.Dump(data))
+		// write to file
+		wrt.Write(data)
+		wrt.Close()
+	
+		//-----------------------------------------------------------------
+		//	create shares from secret
+		//-----------------------------------------------------------------
+		secret := new(big.Int).SetBytes(key)
+		n := len(reviewer)
+		shares := crypto.Split(secret, prime, n, treshold)
+		recipient := make([]*openpgp.Entity, 1)
+	
+		for i, ent := range reviewer {
+			// generate filename based on key id
+			id := strconv.FormatUint(ent.PrimaryKey.KeyId&0xFFFFFFFF, 16)
+			fname = baseName + "." + strings.ToUpper(id) + ".gpg"
+			// create file for output
+			if wrt, err = os.OpenFile(fname, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0666); err != nil {
+				logger.Printf(logger.ERROR, "[sid.upload] Can't create share file '%s'\n", fname)
+				continue
+			}
+			// create PGP armorer
+			if ct, err = armor.Encode(wrt, "PGP MESSAGE", nil); err != nil {
+				logger.Printf(logger.ERROR, "[sid.upload] Can't create armorer: %s\n", err.Error())
+				wrt.Close()
+				continue
+			}
+			// encrypt share to file	
+			recipient[0] = ent
+			if pt, err = openpgp.Encrypt(ct, recipient, nil, nil, nil); err != nil {
+				logger.Printf(logger.ERROR, "[sid.upload] Can't create encrypter: %s\n", err.Error())
+				ct.Close()
+				wrt.Close()
+				continue
+			}
+			pt.Write([]byte(shares[i].P.String() + "\n"))
+			pt.Write([]byte(shares[i].X.String() + "\n"))
+			pt.Write([]byte(shares[i].Y.String() + "\n"))
+			pt.Close()
 			ct.Close()
 			wrt.Close()
-			continue
 		}
-		pt.Write([]byte(shares[i].P.String() + "\n"))
-		pt.Write([]byte(shares[i].X.String() + "\n"))
-		pt.Write([]byte(shares[i].Y.String() + "\n"))
-		pt.Close()
-		ct.Close()
-		wrt.Close()
 	}
 	// report success
 	return true
