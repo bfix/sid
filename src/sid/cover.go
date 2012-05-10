@@ -59,15 +59,15 @@ type State struct {
 	//-----------------------------------------------------------------
 	// Request state
 	//-----------------------------------------------------------------
-	reqMode         	int    // request type (GET, POST)
-	reqState        	int    // request processing (HDR,APPEND)
-	reqResource     	string // resource requested by client
-	reqBoundaryIn   	string // POST boundary separator (incoming,client)
-	reqBoundaryOut  	string // POST boundary separator (outgoing,cover)
-	reqCoverPost    	[]byte // cover POST content
-	reqCoverPostPos 	int    // index into POST content
-	reqUpload       	bool   // parsing client document upload?
-	reqUploadData   	string // client document data
+	reqMode         int    // request type (GET, POST)
+	reqState        int    // request processing (HDR,APPEND)
+	reqResource     string // resource requested by client
+	reqBoundaryIn   string // POST boundary separator (incoming,client)
+	reqBoundaryOut  string // POST boundary separator (outgoing,cover)
+	reqCoverPost    []byte // cover POST content
+	reqCoverPostPos int    // index into POST content
+	reqUpload       bool   // parsing client document upload?
+	reqUploadData   string // client document data
 
 	//-----------------------------------------------------------------
 	// Response state
@@ -91,8 +91,8 @@ type Cover struct {
 	Posts   map[string]([]byte) // list of cover POST replacements
 	Pages   map[string]string   // list of pre-defined web pages
 
-	GetUploadForm	func(*Cover) string     // Function to get upload form
-	GenCoverContent	func(*Cover,int) []byte // Function to construct cover content
+	GetUploadForm   func(*Cover) string      // Function to get upload form
+	GenCoverContent func(*Cover, int) []byte // Function to construct cover content
 }
 
 ///////////////////////////////////////////////////////////////////////
@@ -118,15 +118,15 @@ func (c *Cover) connect() net.Conn {
 		//-------------------------------------------------------------
 		// Request state
 		//-------------------------------------------------------------
-		reqMode:         	REQ_UNKNOWN,
-		reqState:        	RS_HDR,
-		reqResource:     	"",
-		reqBoundaryIn:   	"",
-		reqBoundaryOut:  	"",
-		reqCoverPost:    	nil,
-		reqCoverPostPos: 	0,
-		reqUpload:       	false,
-		reqUploadData:   	"",
+		reqMode:         REQ_UNKNOWN,
+		reqState:        RS_HDR,
+		reqResource:     "",
+		reqBoundaryIn:   "",
+		reqBoundaryOut:  "",
+		reqCoverPost:    nil,
+		reqCoverPostPos: 0,
+		reqUpload:       false,
+		reqUploadData:   "",
 
 		//-------------------------------------------------------------
 		// Response state
@@ -239,7 +239,7 @@ func (c *Cover) xformReq(s *State, data []byte, num int) []byte {
 			pos := strings.LastIndex(parts[1], "/")
 			s.reqBoundaryOut = parts[1][pos+1:]
 			uri := parts[1][0:pos]
-			
+
 			// try to get pre-defined cover content. if no cover content
 			// has been constructed yet, the 'reqCoverPost' will contain
 			// nil and the content is constructed later when the content
@@ -428,7 +428,7 @@ func (c *Cover) xformReq(s *State, data []byte, num int) []byte {
 				// split line into parts
 				parts := strings.Split(line, " ")
 				// get incoming content length
-				size,_ := strconv.Atoi (parts[1])
+				size, _ := strconv.Atoi(parts[1])
 				// construct cover content for given size
 				s.reqCoverPost = c.GenCoverContent(c, size)
 				// add unchanged line

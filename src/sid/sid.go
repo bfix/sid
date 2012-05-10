@@ -88,13 +88,13 @@ func Startup() {
 	// create control service.
 	ch := make(chan bool)
 	ctrl := &ControlSrv{ch}
-	ctrlList := []network.Service { ctrl }
+	ctrlList := []network.Service{ctrl}
 
 	// create HTTP service
 	http := NewHttpSrv(cover)
-	httpList := []network.Service { http }
+	httpList := []network.Service{http}
 	if HttpFallback != nil {
-		httpList = append (httpList, HttpFallback)
+		httpList = append(httpList, HttpFallback)
 	}
 
 	// start network services

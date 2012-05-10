@@ -65,7 +65,7 @@ func InitDocumentHandler(defs UploadDefs) {
 		prime = new(big.Int).Lsh(one, 512)
 		prime = new(big.Int).Sub(prime, one)
 		prime = new(big.Int).Sub(prime, ofs)
-	
+
 		// open keyring file
 		rdr, err := os.Open(defs.Keyring)
 		if err != nil {
@@ -74,7 +74,7 @@ func InitDocumentHandler(defs UploadDefs) {
 			os.Exit(1)
 		}
 		defer rdr.Close()
-	
+
 		// read public keys from keyring
 		if reviewer, err = openpgp.ReadKeyRing(rdr); err != nil {
 			// can't read keys -- terminate!
@@ -120,7 +120,7 @@ func PostprocessUploadData(data []byte) bool {
 			ct     io.WriteCloser = nil
 			pt     io.WriteCloser = nil
 		)
-	
+
 		//-----------------------------------------------------------------
 		// setup AES-256 for encryption
 		//-----------------------------------------------------------------
@@ -133,14 +133,14 @@ func PostprocessUploadData(data []byte) bool {
 		bs := engine.BlockSize()
 		iv := crypto.RandBytes(bs)
 		enc := cipher.NewCFBEncrypter(engine, iv)
-	
+
 		logger.Println(logger.DBG_ALL, "[sid.upload] key:\n"+hex.Dump(key))
 		logger.Println(logger.DBG_ALL, "[sid.upload] IV:\n"+hex.Dump(iv))
-	
+
 		//-----------------------------------------------------------------
 		// encrypt client document into file
 		//-----------------------------------------------------------------
-	
+
 		// open file for output 
 		fname := baseName + ".document.aes256"
 		if wrt, err = os.OpenFile(fname, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0666); err != nil {
@@ -156,7 +156,7 @@ func PostprocessUploadData(data []byte) bool {
 		// write to file
 		wrt.Write(data)
 		wrt.Close()
-	
+
 		//-----------------------------------------------------------------
 		//	create shares from secret
 		//-----------------------------------------------------------------
@@ -164,7 +164,7 @@ func PostprocessUploadData(data []byte) bool {
 		n := len(reviewer)
 		shares := crypto.Split(secret, prime, n, treshold)
 		recipient := make([]*openpgp.Entity, 1)
-	
+
 		for i, ent := range reviewer {
 			// generate filename based on key id
 			id := strconv.FormatUint(ent.PrimaryKey.KeyId&0xFFFFFFFF, 16)
