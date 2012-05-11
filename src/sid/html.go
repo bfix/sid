@@ -215,6 +215,7 @@ loop:
 			switch tk.Err() {
 			case io.ErrUnexpectedEOF:
 				logger.Println(logger.ERROR, "[sid.html] Error parsing content: "+tk.Err().Error())
+				return false
 			case io.EOF:
 				break loop
 			}
@@ -238,7 +239,7 @@ loop:
 				logger.Println(logger.DBG_ALL, "[cover] tag popped from stack: "+tag.String())
 			} else {
 				if name == "html" {
-					logger.Println(logger.DBG_ALL, "*** </html>")
+					logger.Println(logger.DBG_ALL, "body ==> </html>")
 					closed = true
 				}
 				continue loop
@@ -248,8 +249,9 @@ loop:
 			if tag == nil {
 				continue loop
 			}
-			logger.Println(logger.DBG_ALL, "[cover] direct tag : "+tag.String())
+			//logger.Println(logger.DBG_ALL, "[sid.html] direct tag : "+tag.String())
 		} else {
+			//logger.Println(logger.DBG_ALL, "[sid.html] ? "+toktype.String())
 			continue loop
 		}
 
@@ -326,8 +328,22 @@ func readTag(tk *html.Tokenizer) *Tag {
 				return NewTag("link", attrs)
 			}
 		}
+
+	//-----------------------------------------------------
+	// input fields
+	//-----------------------------------------------------
+	case "input":
+		attrs := getAttrs(tk)
+		if attrs != nil {
+			if _, ok := attrs["type"]; ok {
+				// add external reference to link
+				return NewTag("input", attrs)
+			}
+		}
 	}
-	// no tag processed.
+	//-----------------------------------------------------
+	// ignore all other tags (no tag processed).
+	//-----------------------------------------------------
 	return nil
 }
 
