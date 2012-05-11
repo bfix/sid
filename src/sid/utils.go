@@ -110,7 +110,7 @@ func CreateId(size int) string {
 func CreateKey(size int) string {
 	id := ""
 	for len(id) < size {
-		v := crypto.RandInt(0, 62)
+		v := crypto.RandInt(0, 61)
 		if v < 26 {
 			id += string('a' + v)
 		} else if v < 52 {
