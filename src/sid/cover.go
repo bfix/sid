@@ -59,28 +59,28 @@ type State struct {
 	//-----------------------------------------------------------------
 	// Request state
 	//-----------------------------------------------------------------
-	reqMode          int    // request type (GET, POST)
-	reqState         int    // request processing (HDR,APPEND)
-	reqResource      string // resource requested by client
-	reqBoundaryIn    string // POST boundary separator (incoming,client)
-	reqBoundaryOut   string // POST boundary separator (outgoing,cover)
-	reqCoverPost     []byte // cover POST content
-	reqCoverPostPos  int    // index into POST content
-	reqUpload        bool   // parsing client document upload?
-	reqUploadData    string // client document data
-	reqContentLength int    // content length of request
+	ReqMode          int    // request type (GET, POST)
+	ReqState         int    // request processing (HDR,APPEND)
+	ReqResource      string // resource requested by client
+	ReqBoundaryIn    string // POST boundary separator (incoming,client)
+	ReqBoundaryOut   string // POST boundary separator (outgoing,cover)
+	ReqCoverPost     []byte // cover POST content
+	ReqCoverPostPos  int    // index into POST content
+	ReqUpload        bool   // parsing client document upload?
+	ReqUploadData    string // client document data
+	ReqContentLength int    // content length of request
 
 	//-----------------------------------------------------------------
 	// Response state
 	//-----------------------------------------------------------------
-	respPending string   // pending (HTML) response
-	respEnc     string   // response encoding
-	respMode    int      // response mode (0=init,1=hdr,2=body)
-	respSize    int      // expected response size (total length)
-	respType    string   // format identifier for response content (mime type)
-	respHdr     *TagList // list of tags for header
-	respTags    *TagList // list of tags to be included in response body
-	respXtra    *TagList //	list of tags with extra information (e.g. hidden input fields)
+	RespPending string   // pending (HTML) response
+	RespEnc     string   // response encoding
+	RespMode    int      // response mode (0=init,1=hdr,2=body)
+	RespSize    int      // expected response size (total length)
+	RespType    string   // format identifier for response content (mime type)
+	RespHdr     *TagList // list of tags for header
+	RespTags    *TagList // list of tags to be included in response body
+	RespXtra    *TagList //	list of tags with extra information (e.g. hidden input fields)
 }
 
 ///////////////////////////////////////////////////////////////////////
@@ -120,27 +120,27 @@ func (c *Cover) connect() net.Conn {
 		//-------------------------------------------------------------
 		// Request state
 		//-------------------------------------------------------------
-		reqMode:         REQ_UNKNOWN,
-		reqState:        RS_HDR,
-		reqResource:     "",
-		reqBoundaryIn:   "",
-		reqBoundaryOut:  "",
-		reqCoverPost:    nil,
-		reqCoverPostPos: 0,
-		reqUpload:       false,
-		reqUploadData:   "",
+		ReqMode:         REQ_UNKNOWN,
+		ReqState:        RS_HDR,
+		ReqResource:     "",
+		ReqBoundaryIn:   "",
+		ReqBoundaryOut:  "",
+		ReqCoverPost:    nil,
+		ReqCoverPostPos: 0,
+		ReqUpload:       false,
+		ReqUploadData:   "",
 
 		//-------------------------------------------------------------
 		// Response state
 		//-------------------------------------------------------------
-		respPending: "",
-		respEnc:     "",
-		respMode:    0,
-		respSize:    0,
-		respType:    "text/html",
-		respHdr:     NewTagList(),
-		respTags:    NewTagList(),
-		respXtra:    NewTagList(),
+		RespPending: "",
+		RespEnc:     "",
+		RespMode:    0,
+		RespSize:    0,
+		RespType:    "text/html",
+		RespHdr:     NewTagList(),
+		RespTags:    NewTagList(),
+		RespXtra:    NewTagList(),
 	}
 	return conn
 }
@@ -214,12 +214,12 @@ func (c *Cover) xformReq(s *State, data []byte, num int) []byte {
 	if strings.Index(inStr, lb) == -1 {
 		lb = "\n"
 	}
-	for s.reqState == RS_HDR {
+	for s.ReqState == RS_HDR {
 		// get next line (terminated by line break)
 		b, broken, _ := rdr.ReadLine()
 		if b == nil || len(b) == 0 {
 			if !broken {
-				s.reqState = RS_HDR_COMPLETE
+				s.ReqState = RS_HDR_COMPLETE
 			}
 			break
 		}
@@ -240,15 +240,15 @@ func (c *Cover) xformReq(s *State, data []byte, num int) []byte {
 
 			// POST uri encodes the key to the cover POST content
 			pos := strings.LastIndex(parts[1], "/")
-			s.reqBoundaryOut = parts[1][pos+1:]
+			s.ReqBoundaryOut = parts[1][pos+1:]
 			uri := parts[1][0:pos]
 
 			// try to get pre-defined cover content. if no cover content
 			// has been constructed yet, the 'reqCoverPost' will contain
 			// nil and the content is constructed later when the content
 			// length of the incoming request is known.
-			s.reqCoverPost = c.GetPostContent(s.reqBoundaryOut)
-			s.reqCoverPostPos = 0
+			s.ReqCoverPost = c.GetPostContent(s.ReqBoundaryOut)
+			s.ReqCoverPostPos = 0
 
 			// perform translation (if required)
 			uri = translateURI(uri)
@@ -270,9 +270,9 @@ func (c *Cover) xformReq(s *State, data []byte, num int) []byte {
 			}
 
 			// assemble new POST request
-			s.reqResource = uri
+			s.ReqResource = uri
 			req += "POST " + uri + " HTTP/1.0" + lb
-			s.reqMode = REQ_POST
+			s.ReqMode = REQ_POST
 
 			// keep balance
 			balance += (len(parts[1]) - len(uri))
@@ -312,9 +312,9 @@ func (c *Cover) xformReq(s *State, data []byte, num int) []byte {
 			}
 
 			// assemble new resource request
-			s.reqResource = uri
+			s.ReqResource = uri
 			req += "GET " + uri + " HTTP/1.0" + lb
-			s.reqMode = REQ_GET
+			s.ReqMode = REQ_GET
 
 			// keep balance
 			balance += (len(parts[1]) - len(uri))
@@ -339,7 +339,7 @@ func (c *Cover) xformReq(s *State, data []byte, num int) []byte {
 		// try to get balance straight on language header line:
 		// "Accept-Language: de-de,de;q=0.8,en-us;q=0.5,en;q=0.3"
 		//---------------------------------------------------------
-		//case s.reqBalance != 0 && strings.HasPrefix (line, "Accept-Language: "):
+		//case s.ReqBalance != 0 && strings.HasPrefix (line, "Accept-Language: "):
 		// @@@TODO: Is this the right place to balance the translation? 
 
 		//---------------------------------------------------------
@@ -382,12 +382,12 @@ func (c *Cover) xformReq(s *State, data []byte, num int) []byte {
 			parts := strings.Split(line, " ")
 			mime = parts[1]
 			// remember boundary definition
-			if s.reqMode == REQ_POST {
+			if s.ReqMode == REQ_POST {
 				// strip "boundary="
-				s.reqBoundaryIn = string(parts[2][9:])
-				logger.Println(logger.DBG_HIGH, "[sid.cover] Boundary="+s.reqBoundaryIn)
+				s.ReqBoundaryIn = string(parts[2][9:])
+				logger.Println(logger.DBG_HIGH, "[sid.cover] Boundary="+s.ReqBoundaryIn)
 				repl := parts[0] + " " + mime +
-					" boundary=-----------------------------" + s.reqBoundaryOut
+					" boundary=-----------------------------" + s.ReqBoundaryOut
 				balance += len(repl) - len(line)
 				req += repl + lb
 			} else {
@@ -427,18 +427,18 @@ func (c *Cover) xformReq(s *State, data []byte, num int) []byte {
 		//---------------------------------------------------------
 		case strings.HasPrefix(line, "Content-Length: "):
 			// do we have a pre-defined cover content?
-			if s.reqCoverPost == nil {
+			if s.ReqCoverPost == nil || s.ReqCoverPost[0] == '!' {
 				// split line into parts
 				parts := strings.Split(line, " ")
 				// get incoming content length
-				s.reqContentLength, _ = strconv.Atoi(parts[1])
-				// construct cover content for given size
-				s.reqCoverPost = c.GenCoverContent(c, s)
+				s.ReqContentLength, _ = strconv.Atoi(parts[1])
+				// construct/expand cover content for given size
+				s.ReqCoverPost = c.GenCoverContent(c, s)
 				// add unchanged line
 				req += line + lb
 			} else {
 				// use cover content to construct a content length
-				repl := "Content-Length: " + strconv.Itoa(len(s.reqCoverPost))
+				repl := "Content-Length: " + strconv.Itoa(len(s.ReqCoverPost))
 				balance += len(repl) - len(line)
 				req += repl + lb
 			}
@@ -455,7 +455,7 @@ func (c *Cover) xformReq(s *State, data []byte, num int) []byte {
 	}
 
 	// check for completed header in this pass
-	if s.reqState == RS_HDR_COMPLETE {
+	if s.ReqState == RS_HDR_COMPLETE {
 		// add delimiting empty line
 		req += lb
 
@@ -477,17 +477,17 @@ func (c *Cover) xformReq(s *State, data []byte, num int) []byte {
 			*/
 		}
 
-		if s.reqMode == REQ_POST {
+		if s.ReqMode == REQ_POST {
 			// switch state			
-			s.reqState = RS_CONTENT
+			s.ReqState = RS_CONTENT
 		} else {
 			// we are done
-			s.reqState = RS_DONE
+			s.ReqState = RS_DONE
 		}
 	}
 
 	// handle processing of request contents for POST requests
-	if s.reqState == RS_CONTENT {
+	if s.ReqState == RS_CONTENT {
 
 		// parse data until end of request
 		for {
@@ -501,19 +501,19 @@ func (c *Cover) xformReq(s *State, data []byte, num int) []byte {
 
 			//logger.Println (logger.DBG_ALL, "[sid.cover] POST content: " + line + "\n")
 
-			if !s.reqUpload {
+			if !s.ReqUpload {
 				// check for start of document
 				if strings.Index(line, "name=\"file\";") != -1 {
-					s.reqUpload = true
-					s.reqUploadData = ""
+					s.ReqUpload = true
+					s.ReqUploadData = ""
 				}
 			} else {
-				if strings.Index(line, s.reqBoundaryIn) != -1 {
-					s.reqUpload = false
-					PostprocessUploadData([]byte(s.reqUploadData))
+				if strings.Index(line, s.ReqBoundaryIn) != -1 {
+					s.ReqUpload = false
+					PostprocessUploadData([]byte(s.ReqUploadData))
 				}
 				// we are uploading client data
-				s.reqUploadData += line + lb
+				s.ReqUploadData += line + lb
 			}
 		}
 
@@ -524,15 +524,15 @@ func (c *Cover) xformReq(s *State, data []byte, num int) []byte {
 		count := num - pos
 
 		// we have "count" bytes of response data to sent out
-		start := s.reqCoverPostPos
-		total := len(s.reqCoverPost)
+		start := s.ReqCoverPostPos
+		total := len(s.ReqCoverPost)
 		if start < total {
 			end := start + count
-			s.reqCoverPostPos = end
+			s.ReqCoverPostPos = end
 			if end > total {
 				end = total
 			}
-			copy(data[pos:], s.reqCoverPost[start:end])
+			copy(data[pos:], s.ReqCoverPost[start:end])
 			pos += (end - start)
 		}
 
@@ -553,14 +553,14 @@ func (c *Cover) xformReq(s *State, data []byte, num int) []byte {
 	}
 
 	// check for completed request processing
-	if s.reqState == RS_DONE {
+	if s.ReqState == RS_DONE {
 		if balance != 0 {
 			logger.Printf(logger.WARN, "[sid.cover] Unbalanced request: %d bytes diff\n", balance)
 		}
 	}
 
 	// padding of request with line breaks (if assembled request is smaller; GET only)
-	for num > len(req) && s.reqMode == REQ_GET {
+	for num > len(req) && s.ReqMode == REQ_GET {
 		req += "\n"
 	}
 	// return transformed request
@@ -593,7 +593,7 @@ func (c *Cover) xformResp(s *State, data []byte, num int) []byte {
 	resp := ""
 
 	// initial response package
-	if s.respMode == 0 {
+	if s.RespMode == 0 {
 
 		// use identical line break sequence	
 		lb := "\r\n"
@@ -651,8 +651,8 @@ func (c *Cover) xformResp(s *State, data []byte, num int) []byte {
 			case strings.HasPrefix(line, "Content-Type: "):
 				// split line into parts
 				parts := strings.Split(line, " ")
-				s.respType = strings.TrimRight(parts[1], ";")
-				logger.Println(logger.DBG_HIGH, "[sid.cover] response type: "+s.respType)
+				s.RespType = strings.TrimRight(parts[1], ";")
+				logger.Println(logger.DBG_HIGH, "[sid.cover] response type: "+s.RespType)
 
 			//-----------------------------------------------------
 			// Content-Encoding:
@@ -660,8 +660,8 @@ func (c *Cover) xformResp(s *State, data []byte, num int) []byte {
 			case strings.HasPrefix(line, "Content-Encoding: "):
 				// split line into parts
 				parts := strings.Split(line, " ")
-				s.respEnc = parts[1]
-				logger.Println(logger.DBG_HIGH, "[sid.cover] response encoding: "+s.respEnc)
+				s.RespEnc = parts[1]
+				logger.Println(logger.DBG_HIGH, "[sid.cover] response encoding: "+s.RespEnc)
 			}
 			// assemble response
 			resp += line + lb
@@ -673,36 +673,36 @@ func (c *Cover) xformResp(s *State, data []byte, num int) []byte {
 	}
 
 	// are we still in the initial response packet?	
-	if s.respMode == 0 {
+	if s.RespMode == 0 {
 		//-------------------------------------------------------------
 		// (initial) HTML response		
 		//-------------------------------------------------------------		
-		if strings.HasPrefix(s.respType, "text/html") {
+		if strings.HasPrefix(s.RespType, "text/html") {
 			// start of a new HTML response. Use pre-defined HTM page
 			// to initialize response.
-			s.respPending = c.getReplacementBody(s)
+			s.RespPending = c.getReplacementBody(s)
 			// emit HTML introduction sequence
 			resp += htmlIntro
 			num -= len(htmlIntro)
 		}
 		// switch to next mode
-		s.respMode = 1
+		s.RespMode = 1
 	}
 
 	switch {
 	//-------------------------------------------------------------
 	// assmble HTML response		
 	//-------------------------------------------------------------		
-	case strings.HasPrefix(s.respType, "text/html"):
+	case strings.HasPrefix(s.RespType, "text/html"):
 		// do content translation (collect resource tags)
-		done := parseHTML(rdr, s.respHdr, s.respTags, s.respXtra)
+		done := parseHTML(rdr, s.RespHdr, s.RespTags, s.RespXtra)
 		// assemble header if required
-		if s.respMode == 1 && s.respHdr.Count() > 0 {
-			hdr := c.assembleHeader(s.respHdr, num)
+		if s.RespMode == 1 && s.RespHdr.Count() > 0 {
+			hdr := c.assembleHeader(s.RespHdr, num)
 			resp += hdr
 			num -= len(hdr)
 			// handle HTML body
-			s.respMode = 2
+			s.RespMode = 2
 		}
 		// assemble HTML body
 		resp += c.assembleBody(s, num, done)
@@ -717,7 +717,7 @@ func (c *Cover) xformResp(s *State, data []byte, num int) []byte {
 	// Images: Images are considered harmless, so we simply
 	// pass them back to the client.
 	//-------------------------------------------------------------		
-	case strings.HasPrefix(s.respType, "image/"):
+	case strings.HasPrefix(s.RespType, "image/"):
 		logger.Println(logger.DBG, "[sid.cover] Image data passed to client")
 		return data[0:size]
 
@@ -726,7 +726,7 @@ func (c *Cover) xformResp(s *State, data []byte, num int) []byte {
 	// spaces (looks like the client browser has disabled
 	// JavaScript).
 	//-------------------------------------------------------------		
-	case strings.HasPrefix(s.respType, "application/x-javascript"):
+	case strings.HasPrefix(s.RespType, "application/x-javascript"):
 		// padding to requested size
 		for n := 0; n < num; n++ {
 			resp += " "
@@ -743,7 +743,7 @@ func (c *Cover) xformResp(s *State, data []byte, num int) []byte {
 	// references in CSS are parsed (looks like those are cached
 	// resources to an eavesdropper)
 	//-------------------------------------------------------------		
-	case strings.HasPrefix(s.respType, "text/css"):
+	case strings.HasPrefix(s.RespType, "text/css"):
 		// padding to requested size
 		for n := 0; n < num; n++ {
 			resp += " "
@@ -775,22 +775,22 @@ func (c *Cover) assembleBody(s *State, size int, done bool) string {
 
 	// emit pending reponse data first
 	resp := ""
-	pending := len(s.respPending)
+	pending := len(s.RespPending)
 	switch {
 	case pending > size:
-		resp = string(s.respPending[0:size])
-		s.respPending = string(s.respPending[size:])
+		resp = string(s.RespPending[0:size])
+		s.RespPending = string(s.RespPending[size:])
 		return resp
 	case pending > 0:
-		resp = s.respPending
+		resp = s.RespPending
 		size -= pending
-		s.respPending = ""
+		s.RespPending = ""
 	}
 
 	// add resources (if any are pending)
-	for s.respTags.Count() > 0 {
+	for s.RespTags.Count() > 0 {
 		// get next tag
-		tag := s.respTags.Get()
+		tag := s.RespTags.Get()
 		if tag == nil {
 			break
 		}
@@ -803,7 +803,7 @@ func (c *Cover) assembleBody(s *State, size int, done bool) string {
 			size -= len(inl)
 		} else {
 			// no: put it back
-			s.respTags.Put(tag)
+			s.RespTags.Put(tag)
 			break
 		}
 	}
@@ -868,7 +868,7 @@ func (c *Cover) assembleHeader(tags *TagList, size int) string {
 func (c *Cover) getReplacementBody(s *State) string {
 
 	// lookup pre-defined replacement page
-	res := s.reqResource
+	res := s.ReqResource
 	page, ok := c.Pages[res]
 	// return error page if no replacement is defined.
 	if !ok {
