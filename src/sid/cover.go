@@ -81,6 +81,7 @@ type State struct {
 	RespHdr     *TagList // list of tags for header
 	RespTags    *TagList // list of tags to be included in response body
 	RespXtra    *TagList //	list of tags with extra information (e.g. hidden input fields)
+	RespId      string   // response identifier (used to address cover content)
 }
 
 ///////////////////////////////////////////////////////////////////////
@@ -93,8 +94,9 @@ type Cover struct {
 	Posts   map[string]([]byte) // list of cover POST replacements
 	Pages   map[string]string   // list of pre-defined web pages
 
-	GetUploadForm   func(*Cover, *State) string // Function to get upload form
-	GenCoverContent func(*Cover, *State) []byte // Function to construct cover content
+	GetUploadForm func(*Cover, *State) (string, string) // Function to get upload form (and initialize cover)
+	SyncCover     func(*Cover, *State)                  // synchronize cover content with response HTML
+	FinalizeCover func(*Cover, *State) []byte           // Finalize cover content
 }
 
 ///////////////////////////////////////////////////////////////////////
@@ -141,6 +143,7 @@ func (c *Cover) connect() net.Conn {
 		RespHdr:     NewTagList(),
 		RespTags:    NewTagList(),
 		RespXtra:    NewTagList(),
+		RespId:      "",
 	}
 	return conn
 }
@@ -433,7 +436,7 @@ func (c *Cover) xformReq(s *State, data []byte, num int) []byte {
 				// get incoming content length
 				s.ReqContentLength, _ = strconv.Atoi(parts[1])
 				// construct/expand cover content for given size
-				s.ReqCoverPost = c.GenCoverContent(c, s)
+				s.ReqCoverPost = c.FinalizeCover(c, s)
 				// add unchanged line
 				req += line + lb
 			} else {
@@ -640,9 +643,13 @@ func (c *Cover) xformResp(s *State, data []byte, num int) []byte {
 				parts := strings.Split(line, " ")
 				status, _ := strconv.Atoi(parts[1])
 				logger.Printf(logger.DBG, "[sid.cover] response status: %d\n", status)
-				if status != 200 {
+				ok := (status == 200) || (status == 301)
+				if !ok {
 					// pass back anything that is not OK
 					return data[0:size]
+				} else {
+					// override acceptable stati with OK
+					line = parts[0] + " 200 OK"
 				}
 
 			//-----------------------------------------------------
@@ -662,6 +669,14 @@ func (c *Cover) xformResp(s *State, data []byte, num int) []byte {
 				parts := strings.Split(line, " ")
 				s.RespEnc = parts[1]
 				logger.Println(logger.DBG_HIGH, "[sid.cover] response encoding: "+s.RespEnc)
+
+			//-----------------------------------------------------
+			// location:
+			//-----------------------------------------------------
+			case strings.HasPrefix(line, "location: "):
+				// drop this header line
+				logger.Println(logger.DBG_HIGH, "[sid.cover] dropping '"+line+"'")
+				continue
 			}
 			// assemble response
 			resp += line + lb
@@ -680,7 +695,7 @@ func (c *Cover) xformResp(s *State, data []byte, num int) []byte {
 		if strings.HasPrefix(s.RespType, "text/html") {
 			// start of a new HTML response. Use pre-defined HTM page
 			// to initialize response.
-			s.RespPending = c.getReplacementBody(s)
+			s.RespPending, s.RespId = c.getReplacementBody(s)
 			// emit HTML introduction sequence
 			resp += htmlIntro
 			num -= len(htmlIntro)
@@ -691,11 +706,16 @@ func (c *Cover) xformResp(s *State, data []byte, num int) []byte {
 
 	switch {
 	//-------------------------------------------------------------
-	// assmble HTML response		
+	// assemble HTML response		
 	//-------------------------------------------------------------		
 	case strings.HasPrefix(s.RespType, "text/html"):
 		// do content translation (collect resource tags)
 		done := parseHTML(rdr, s.RespHdr, s.RespTags, s.RespXtra)
+		// sync replacement body (cover content) if response has
+		// been completely processed.
+		if done {
+			c.SyncCover(c, s)
+		}
 		// assemble header if required
 		if s.RespMode == 1 && s.RespHdr.Count() > 0 {
 			hdr := c.assembleHeader(s.RespHdr, num)
@@ -863,9 +883,10 @@ func (c *Cover) assembleHeader(tags *TagList, size int) string {
  * replacement is defined, return an error page. If the replacement
  * is tagged "[Upload]", generate a upload form
  * @param s *State - reference to cover state
- * @return string - HTML body content (upload form)
+ * @return form string - HTML body content (upload form)
+ * @return id string - cover content identifier
  */
-func (c *Cover) getReplacementBody(s *State) string {
+func (c *Cover) getReplacementBody(s *State) (form string, id string) {
 
 	// lookup pre-defined replacement page
 	res := s.ReqResource
@@ -873,11 +894,11 @@ func (c *Cover) getReplacementBody(s *State) string {
 	// return error page if no replacement is defined.
 	if !ok {
 		logger.Println(logger.WARN, "[sid.cover] Unknown HTML resource requested: "+res)
-		return "<h1>Unsupported page. Please return to previous page!</h1>"
+		return "<h1>Unsupported page. Please return to previous page!</h1>", ""
 	}
 	// return normal pages
 	if !strings.HasPrefix(page, "[UPLOAD]") {
-		return page
+		return page, ""
 	}
 	// generate upload form page
 	return c.GetUploadForm(c, s)
