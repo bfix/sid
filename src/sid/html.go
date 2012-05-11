@@ -85,6 +85,16 @@ func (t *Tag) String() string {
 	return res + "/>"
 }
 
+//---------------------------------------------------------------------
+/*
+ * Get value of tag attribute.
+ * @param name string - attribute name
+ * @return string - attribute value
+ */
+func (t *Tag) GetAttr(name string) string {
+	return t.attrs[name]
+}
+
 ///////////////////////////////////////////////////////////////////////
 /*
  * List of tags.
@@ -126,6 +136,39 @@ func (t *TagList) Get() *Tag {
 	tag := t.list[0]
 	t.list = t.list[1:]
 	return tag
+}
+
+//---------------------------------------------------------------------
+/*
+ * Lookup all tags with "name" attribute.
+ * @param name string - attribute name to look for
+ * @return []*Tag - list of matching tags
+ */
+func (t *TagList) Lookup(name string) []*Tag {
+	out := make([]*Tag, 0)
+	for _, e := range t.list {
+		if _, ok := e.attrs[name]; ok {
+			out = append(out, e)
+		}
+	}
+	return out
+}
+
+//---------------------------------------------------------------------
+/*
+ * Lookup all tags with "name=value" attribute.
+ * @param name string - attribute name to look for
+ * @param value string - attribute value to look for
+ * @return []*Tag - list of matching tags
+ */
+func (t *TagList) LookupPair(name, value string) []*Tag {
+	out := make([]*Tag, 0)
+	for _, e := range t.list {
+		if e.attrs[name] == value {
+			out = append(out, e)
+		}
+	}
+	return out
 }
 
 //---------------------------------------------------------------------
