@@ -99,3 +99,25 @@ func CreateId(size int) string {
 	}
 	return id
 }
+
+//---------------------------------------------------------------------
+/*
+ * Create a key of given length to be used as an identifier.
+ * The character set is [a-zA-Z0-9]
+ * @param size int - desired length of key
+ * @return string - generated number string
+ */
+func CreateKey(size int) string {
+	id := ""
+	for len(id) < size {
+		v := crypto.RandInt(0, 62)
+		if v < 26 {
+			id += string('a' + v)
+		} else if v < 52 {
+			id += string('A' + v - 26)
+		} else {
+			id += string('0' + v - 52)
+		}
+	}
+	return id
+}
