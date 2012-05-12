@@ -46,14 +46,20 @@ var CustomInitialization func() *Cover = nil
  */
 var HttpFallback network.Service = nil
 
+/*
+ * Override for HTTP server start-up: customized version of SID
+ * can turn off the HTTP server at start-up.
+ */
+var HttpActive bool = true
+
 ///////////////////////////////////////////////////////////////////////
 // Main application start-up code.
 
 func Startup() {
 
 	logger.Println(logger.INFO, "[sid] ==============================")
-	logger.Println(logger.INFO, "[sid] SID v0.2 -- Server In Disguise")
-	logger.Println(logger.INFO, "[sid] (c) 2012 Bernd R. Fix      >Y<")
+	logger.Println(logger.INFO, "[sid] SID v0.3 -- Server In Disguise")
+	logger.Println(logger.INFO, "[sid] (c) 2011-2012 Bernd R. Fix >Y<")
 	logger.Println(logger.INFO, "[sid] ==============================")
 
 	//-----------------------------------------------------------------
@@ -99,7 +105,9 @@ func Startup() {
 
 	// start network services
 	network.RunService("tcp", ":"+strconv.Itoa(CfgData.CtrlPort), ctrlList)
-	network.RunService("tcp", ":"+strconv.Itoa(CfgData.HttpPort), httpList)
+	if HttpActive {
+		network.RunService("tcp", ":"+strconv.Itoa(CfgData.HttpPort), httpList)
+	}
 
 	// wait for termination
 	<-ch
