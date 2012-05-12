@@ -97,15 +97,18 @@ func Startup() {
 	ctrlList := []network.Service{ctrl}
 
 	// create HTTP service
-	http := NewHttpSrv(cover)
-	httpList := []network.Service{http}
+	httpList := make([]network.Service, 0)
+	if HttpActive {
+		http := NewHttpSrv(cover)
+		httpList = append(httpList, http)
+	}
 	if HttpFallback != nil {
 		httpList = append(httpList, HttpFallback)
 	}
 
 	// start network services
 	network.RunService("tcp", ":"+strconv.Itoa(CfgData.CtrlPort), ctrlList)
-	if HttpActive {
+	if len(httpList) > 0 {
 		network.RunService("tcp", ":"+strconv.Itoa(CfgData.HttpPort), httpList)
 	}
 
