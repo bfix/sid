@@ -80,8 +80,12 @@ type State struct {
 	RespType    string   // format identifier for response content (mime type)
 	RespHdr     *TagList // list of tags for header
 	RespTags    *TagList // list of tags to be included in response body
-	RespXtra    *TagList //	list of tags with extra information (e.g. hidden input fields)
-	RespId      string   // response identifier (used to address cover content)
+	RespXtra    *TagList // list of tags with extra information (e.g. hidden input fields)
+
+	//-----------------------------------------------------------------
+	// Shared additional data
+	//-----------------------------------------------------------------
+	Data map[string]string // additional data
 }
 
 ///////////////////////////////////////////////////////////////////////
@@ -145,7 +149,11 @@ func (c *Cover) connect() net.Conn {
 		RespHdr:     NewTagList(),
 		RespTags:    NewTagList(),
 		RespXtra:    NewTagList(),
-		RespId:      "",
+
+		//-------------------------------------------------------------
+		// Additional data
+		//-------------------------------------------------------------
+		Data: make(map[string]string),
 	}
 	return conn
 }
@@ -696,7 +704,9 @@ func (c *Cover) xformResp(s *State, data []byte, num int) []byte {
 		if strings.HasPrefix(s.RespType, "text/html") {
 			// start of a new HTML response. Use pre-defined HTM page
 			// to initialize response.
-			s.RespPending, s.RespId = c.HandleRequest(c, s)
+			var coverId string = ""
+			s.RespPending, coverId = c.HandleRequest(c, s)
+			s.Data["CoverId"] = coverId
 		}
 		// switch to next mode
 		s.RespMode = 1
