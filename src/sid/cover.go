@@ -94,9 +94,8 @@ type Cover struct {
 	Protocol string              // HTTP/HTTPS protocol spec
 	States   map[net.Conn]*State // state of active connections
 	Posts    map[string]([]byte) // list of cover POST replacements
-	Pages    map[string]string   // list of pre-defined web pages
 
-	GetUploadForm func(*Cover, *State) (string, string) // Function to get upload form (and initialize cover)
+	HandleRequest func(*Cover, *State) (string, string) // Handle HTML request (w/ special cases)
 	SyncCover     func(*Cover, *State)                  // synchronize cover content with response HTML
 	FinalizeCover func(*Cover, *State) []byte           // Finalize cover content
 }
@@ -697,7 +696,7 @@ func (c *Cover) xformResp(s *State, data []byte, num int) []byte {
 		if strings.HasPrefix(s.RespType, "text/html") {
 			// start of a new HTML response. Use pre-defined HTM page
 			// to initialize response.
-			s.RespPending, s.RespId = c.getReplacementBody(s)
+			s.RespPending, s.RespId = c.HandleRequest(c, s)
 		}
 		// switch to next mode
 		s.RespMode = 1
@@ -882,33 +881,6 @@ func (c *Cover) assembleHeader(tags *TagList, size int) string {
 	// close header
 	hdr += "</head>\n"
 	return hdr
-}
-
-//---------------------------------------------------------------------
-/*
- * Get HTML replacement page: Return defined replacement page. If no
- * replacement is defined, return an error page. If the replacement
- * is tagged "[Upload]", generate a upload form
- * @param s *State - reference to cover state
- * @return form string - HTML body content (upload form)
- * @return id string - cover content identifier
- */
-func (c *Cover) getReplacementBody(s *State) (form string, id string) {
-
-	// lookup pre-defined replacement page
-	res := s.ReqResource
-	page, ok := c.Pages[res]
-	// return error page if no replacement is defined.
-	if !ok {
-		logger.Println(logger.WARN, "[sid.cover] Unknown HTML resource requested: "+res)
-		return "<h1>Unsupported page. Please return to previous page!</h1>", ""
-	}
-	// return normal pages
-	if !strings.HasPrefix(page, "[UPLOAD]") {
-		return page, ""
-	}
-	// generate upload form page
-	return c.GetUploadForm(c, s)
 }
 
 //---------------------------------------------------------------------
