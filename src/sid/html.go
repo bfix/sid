@@ -224,7 +224,7 @@ loop:
 			// we are starting a tag. push to stack until EndTagToken is encountered.
 			tag = readTag(tk)
 			if tag != nil {
-				logger.Println(logger.DBG_ALL, "[cover] tag pushed to stack: "+tag.String())
+				logger.Println(logger.DBG_ALL, "[sid.html] tag pushed to stack: "+tag.String())
 				stack = append(stack, tag)
 			}
 			continue loop
@@ -236,7 +236,7 @@ loop:
 				// found matching tag
 				tag = stack[pos]
 				stack = stack[0:pos]
-				logger.Println(logger.DBG_ALL, "[cover] tag popped from stack: "+tag.String())
+				logger.Println(logger.DBG_ALL, "[sid.html] tag popped from stack: "+tag.String())
 			} else {
 				if name == "html" {
 					logger.Println(logger.DBG_ALL, "body ==> </html>")
