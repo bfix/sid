@@ -89,10 +89,12 @@ type State struct {
  * Cover server instance (stateful)
  */
 type Cover struct {
-	Address string              // address of cover server
-	States  map[net.Conn]*State // state of active connections
-	Posts   map[string]([]byte) // list of cover POST replacements
-	Pages   map[string]string   // list of pre-defined web pages
+	Name     string              // hostname of cover server
+	Port     int                 // target port of cover server
+	Protocol string              // HTTP/HTTPS protocol spec
+	States   map[net.Conn]*State // state of active connections
+	Posts    map[string]([]byte) // list of cover POST replacements
+	Pages    map[string]string   // list of pre-defined web pages
 
 	GetUploadForm func(*Cover, *State) (string, string) // Function to get upload form (and initialize cover)
 	SyncCover     func(*Cover, *State)                  // synchronize cover content with response HTML
@@ -108,7 +110,8 @@ type Cover struct {
  */
 func (c *Cover) connect() net.Conn {
 	// establish connection
-	conn, err := net.Dial("tcp", c.Address)
+	addr := c.Name + ":" + strconv.Itoa(c.Port)
+	conn, err := net.Dial("tcp", addr)
 	if err != nil {
 		// can't connect
 		logger.Printf(logger.ERROR, "[sid.cover] failed to connect to cover server: %s\n", err.Error())
@@ -208,9 +211,9 @@ func (c *Cover) xformReq(s *State, data []byte, num int) []byte {
 	req := ""
 	hasContentEncoding := false // expected content encoding defined?
 	//hasTransferEncoding := false		// expected transfer encoding defined?
-	mime := "text/html"     // expected content type
-	targetHost := c.Address // request resource from this host (default)
-	balance := 0            // balance between incoming and outgoing information
+	mime := "text/html"  // expected content type
+	targetHost := c.Name // request resource from this host (default)
+	balance := 0         // balance between incoming and outgoing information
 
 	// use identical line break sequence	
 	lb := "\r\n"
@@ -241,10 +244,14 @@ func (c *Cover) xformReq(s *State, data []byte, num int) []byte {
 			parts := strings.Split(line, " ")
 			logger.Printf(logger.DBG_HIGH, "[sid.cover] POST '%s'\n", parts[1])
 
-			// POST uri encodes the key to the cover POST content
-			pos := strings.LastIndex(parts[1], "/")
-			s.ReqBoundaryOut = parts[1][pos+1:]
-			uri := parts[1][0:pos]
+			// POST uri encodes the key to the cover POST content and the
+			// target POST URL
+			elem := strings.Split(parts[1], "/")
+			s.ReqBoundaryOut = elem[1]
+			uri := ""
+			for i := 2; i < len(elem); i++ {
+				uri += "/" + elem[i]
+			}
 
 			// try to get pre-defined cover content. if no cover content
 			// has been constructed yet, the 'reqCoverPost' will contain
@@ -253,23 +260,20 @@ func (c *Cover) xformReq(s *State, data []byte, num int) []byte {
 			s.ReqCoverPost = c.GetPostContent(s.ReqBoundaryOut)
 			s.ReqCoverPostPos = 0
 
-			// perform translation (if required)
-			uri = translateURI(uri)
-			logger.Printf(logger.INFO, "[sid.cover] URI translation: '%s' => '%s'\n", parts[1], uri)
-
 			// if URI refers to an external host, split into
 			// host reference and resource specification
 			if pos := strings.Index(uri, "://"); pos != -1 {
-				pos = strings.Index(string(uri[pos+3:]), "/")
+				rem := string(uri[pos+3:])
+				pos = strings.Index(rem, "/")
 				if pos != -1 {
-					targetHost = uri[0:pos]
-					uri = uri[pos:]
+					targetHost = rem[0:pos]
+					uri = rem[pos:]
 					logger.Printf(logger.INFO, "[sid.cover] URI split: '%s', '%s'\n", targetHost, uri)
 				} else {
 					logger.Printf(logger.WARN, "[sid.cover] URI split failed on '%s'\n", uri)
 				}
 			} else {
-				targetHost = c.Address
+				targetHost = c.Name
 			}
 
 			// assemble new POST request
@@ -302,16 +306,17 @@ func (c *Cover) xformReq(s *State, data []byte, num int) []byte {
 			// if URI refers to an external host, split into
 			// host reference and resource specification
 			if pos := strings.Index(uri, "://"); pos != -1 {
-				pos = strings.Index(string(uri[pos+3:]), "/")
+				rem := string(uri[pos+3:])
+				pos = strings.Index(rem, "/")
 				if pos != -1 {
-					targetHost = uri[0:pos]
-					uri = uri[pos:]
+					targetHost = rem[0:pos]
+					uri = rem[pos:]
 					logger.Printf(logger.INFO, "[sid.cover] URI split: '%s', '%s'\n", targetHost, uri)
 				} else {
 					logger.Printf(logger.WARN, "[sid.cover] URI split failed on '%s'\n", uri)
 				}
 			} else {
-				targetHost = c.Address
+				targetHost = c.Name
 			}
 
 			// assemble new resource request
@@ -437,14 +442,11 @@ func (c *Cover) xformReq(s *State, data []byte, num int) []byte {
 				s.ReqContentLength, _ = strconv.Atoi(parts[1])
 				// construct/expand cover content for given size
 				s.ReqCoverPost = c.FinalizeCover(c, s)
-				// add unchanged line
-				req += line + lb
-			} else {
-				// use cover content to construct a content length
-				repl := "Content-Length: " + strconv.Itoa(len(s.ReqCoverPost))
-				balance += len(repl) - len(line)
-				req += repl + lb
 			}
+			// use cover content to construct a content length
+			repl := "Content-Length: " + strconv.Itoa(len(s.ReqCoverPost))
+			balance += len(repl) - len(line)
+			req += repl + lb
 
 		//---------------------------------------------------------
 		// add unchanged request lines. 
@@ -531,6 +533,9 @@ func (c *Cover) xformReq(s *State, data []byte, num int) []byte {
 		total := len(s.ReqCoverPost)
 		if start < total {
 			end := start + count
+			if end < total {
+				end = total
+			}
 			s.ReqCoverPostPos = end
 			if end > total {
 				end = total
@@ -560,17 +565,17 @@ func (c *Cover) xformReq(s *State, data []byte, num int) []byte {
 		if balance != 0 {
 			logger.Printf(logger.WARN, "[sid.cover] Unbalanced request: %d bytes diff\n", balance)
 		}
+	} else {
+		// padding of request with line breaks (if assembled request is smaller; GET only)
+		for num > len(req) && s.ReqMode == REQ_GET {
+			req += "\n"
+		}
+		// return transformed request
+		if num != len(req) {
+			logger.Printf(logger.WARN, "[sid.cover] DIFF(request) = %d\n", len(req)-num)
+		}
+		logger.Printf(logger.DBG_ALL, "[sid.cover] Transformed request:\n"+req+"\n")
 	}
-
-	// padding of request with line breaks (if assembled request is smaller; GET only)
-	for num > len(req) && s.ReqMode == REQ_GET {
-		req += "\n"
-	}
-	// return transformed request
-	if num != len(req) {
-		logger.Printf(logger.WARN, "[sid.cover] DIFF(request) = %d\n", len(req)-num)
-	}
-	logger.Printf(logger.DBG_ALL, "[sid.cover] Transformed request:\n"+req+"\n")
 	return []byte(req)
 }
 
@@ -643,13 +648,8 @@ func (c *Cover) xformResp(s *State, data []byte, num int) []byte {
 				parts := strings.Split(line, " ")
 				status, _ := strconv.Atoi(parts[1])
 				logger.Printf(logger.DBG, "[sid.cover] response status: %d\n", status)
-				ok := (status == 200) || (status == 301)
-				if !ok {
-					// pass back anything that is not OK
-					return data[0:size]
-				} else {
-					// override acceptable stati with OK
-					line = parts[0] + " 200 OK"
+				if status != 200 {
+					return data[:size]
 				}
 
 			//-----------------------------------------------------
@@ -674,9 +674,10 @@ func (c *Cover) xformResp(s *State, data []byte, num int) []byte {
 			// location:
 			//-----------------------------------------------------
 			case strings.HasPrefix(line, "location: "):
-				// drop this header line
-				logger.Println(logger.DBG_HIGH, "[sid.cover] dropping '"+line+"'")
-				continue
+				// split line into parts
+				parts := strings.Split(line, " ")
+				line = "location: " + translateURI(parts[1])
+				logger.Println(logger.DBG_HIGH, "[sid.cover] changing location => "+line)
 			}
 			// assemble response
 			resp += line + lb
@@ -696,9 +697,6 @@ func (c *Cover) xformResp(s *State, data []byte, num int) []byte {
 			// start of a new HTML response. Use pre-defined HTM page
 			// to initialize response.
 			s.RespPending, s.RespId = c.getReplacementBody(s)
-			// emit HTML introduction sequence
-			resp += htmlIntro
-			num -= len(htmlIntro)
 		}
 		// switch to next mode
 		s.RespMode = 1
@@ -793,9 +791,17 @@ func (c *Cover) xformResp(s *State, data []byte, num int) []byte {
  */
 func (c *Cover) assembleBody(s *State, size int, done bool) string {
 
+	// check if requested size can hold HTML wrapper at all.
+	if size < len(htmlIntro)+len(htmlOutro)+10 {
+		return ""
+	}
+	// create HTML intro
+	resp := htmlIntro
+	size -= len(htmlIntro)
+
 	// emit pending reponse data first
-	resp := ""
 	pending := len(s.RespPending)
+	logger.Printf(logger.DBG_ALL, "[sid.cover] assembleBody (%d) -- %d\n", size, pending)
 	switch {
 	case pending > size:
 		resp = string(s.RespPending[0:size])
