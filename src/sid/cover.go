@@ -395,7 +395,7 @@ func (c *Cover) xformReq(s *State, data []byte, num int) []byte {
 				s.ReqBoundaryIn = string(parts[2][9:])
 				logger.Println(logger.DBG_HIGH, "[sid.cover] Boundary="+s.ReqBoundaryIn)
 				repl := parts[0] + " " + mime +
-					" boundary=-----------------------------" + s.ReqBoundaryOut
+					" boundary=---------------------------" + s.ReqBoundaryOut
 				balance += len(repl) - len(line)
 				req += repl + lb
 			} else {
@@ -406,8 +406,9 @@ func (c *Cover) xformReq(s *State, data []byte, num int) []byte {
 		// Referer
 		//---------------------------------------------------------
 		case strings.HasPrefix(line, "Referer: "):
-			// don't add spec
-			balance -= len(line)
+			repl := "Referer: " + c.Protocol + "://" + targetHost + "/"
+			balance += len(repl) - len(line)
+			req += repl + lb
 
 		//---------------------------------------------------------
 		// Connection
