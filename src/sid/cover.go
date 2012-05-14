@@ -541,9 +541,6 @@ func (c *Cover) xformReq(s *State, data []byte, num int) []byte {
 		total := len(s.ReqCoverPost)
 		if start < total {
 			end := start + count
-			if end < total {
-				end = total
-			}
 			s.ReqCoverPostPos = end
 			if end > total {
 				end = total
