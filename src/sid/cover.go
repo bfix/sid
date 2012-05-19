@@ -695,13 +695,13 @@ func (c *Cover) xformResp(s *State, data []byte, num int) []byte {
 		num -= len(resp)
 	}
 
-	// are we still in the initial response packet?	
+	// start of HTML response?	
 	if s.RespMode == 0 {
 		//-------------------------------------------------------------
-		// (initial) HTML response		
+		// start HTML response		
 		//-------------------------------------------------------------		
 		if strings.HasPrefix(s.RespType, "text/html") {
-			// start of a new HTML response. Use pre-defined HTM page
+			// start of a new HTML response. Use pre-defined HTML page
 			// to initialize response.
 			var coverId string = ""
 			s.RespPending, coverId = c.HandleRequest(c, s)
@@ -723,21 +723,42 @@ func (c *Cover) xformResp(s *State, data []byte, num int) []byte {
 		if done {
 			c.SyncCover(c, s)
 		}
-		// assemble header if required
-		if s.RespMode == 1 && s.RespHdr.Count() > 0 {
-			hdr := c.assembleHeader(s.RespHdr, num)
-			resp += hdr
-			num -= len(hdr)
+
+		// start of HTML?		
+		if s.RespMode == 1 {
+			// initial HTML sequence
+			resp += htmlIntro
+			// output header if available
+			if s.RespHdr.Count() > 0 {
+				hdr := c.assembleHeader(s.RespHdr, num)
+				resp += hdr
+				num -= len(hdr)
+			}
 			// handle HTML body
 			s.RespMode = 2
+			// open body tag
+			str := "<body>\n"
+			resp += str
+			num -= len(str)
 		}
-		// assemble HTML body
-		resp += c.assembleBody(s, num, done)
-		logger.Println(logger.DBG_ALL, "[sid.cover] Translated response:\n"+resp)
+		// continue to assemble HTML body
+		body := c.assembleBody(s, num, done)
+		resp += body
+		num -= len(body)
+		if done {
+			// close body and HTML
+			resp += htmlOutro
+			num -= len(htmlOutro)
+		}
+		// we are done with this response packer, but have still response
+		// data to transfer. Fill up with padding sequence. 
+		resp += padding(size)
+		
 		// return response data
 		if size != len(resp) {
 			logger.Printf(logger.WARN, "[sid.cover] DIFF(response:2) = %d\n", len(resp)-size)
 		}
+		logger.Println(logger.DBG_ALL, "[sid.cover] Translated response:\n"+resp)
 		return []byte(resp)
 
 	//-------------------------------------------------------------
@@ -801,12 +822,11 @@ func (c *Cover) xformResp(s *State, data []byte, num int) []byte {
 func (c *Cover) assembleBody(s *State, size int, done bool) string {
 
 	// check if requested size can hold HTML wrapper at all.
-	if size < len(htmlIntro)+len(htmlOutro)+10 {
+	if size < 10 {
 		return ""
 	}
-	// create HTML intro
-	resp := htmlIntro
-	size -= len(htmlIntro)
+	// continue HTML body
+	resp := ""
 
 	// emit pending reponse data first
 	pending := len(s.RespPending)
@@ -842,16 +862,6 @@ func (c *Cover) assembleBody(s *State, size int, done bool) string {
 			break
 		}
 	}
-
-	// close HTML if possible
-	if done {
-		resp += htmlOutro
-		size -= len(htmlOutro)
-	}
-	// we are done, but have still response data to transfer. Fill up
-	// with padding sequence. 
-	resp += padding(size)
-
 	return resp
 }
 
