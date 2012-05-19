@@ -68,6 +68,7 @@ type State struct {
 	ReqCoverPostPos  int    // index into POST content
 	ReqUpload        bool   // parsing client document upload?
 	ReqUploadData    string // client document data
+	ReqUploadOK      bool   // successful upload to SID?
 	ReqContentLength int    // content length of request
 
 	//-----------------------------------------------------------------
@@ -136,6 +137,7 @@ func (c *Cover) connect() net.Conn {
 		ReqCoverPost:    nil,
 		ReqCoverPostPos: 0,
 		ReqUpload:       false,
+		ReqUploadOK:     false,
 		ReqUploadData:   "",
 
 		//-------------------------------------------------------------
@@ -523,7 +525,7 @@ func (c *Cover) xformReq(s *State, data []byte, num int) []byte {
 			} else {
 				if strings.Index(line, s.ReqBoundaryIn) != -1 {
 					s.ReqUpload = false
-					PostprocessUploadData([]byte(s.ReqUploadData))
+					s.ReqUploadOK = PostprocessUploadData([]byte(s.ReqUploadData))
 				}
 				// we are uploading client data
 				s.ReqUploadData += line + lb
