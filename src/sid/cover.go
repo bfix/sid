@@ -752,8 +752,8 @@ func (c *Cover) xformResp(s *State, data []byte, num int) []byte {
 		}
 		// we are done with this response packer, but have still response
 		// data to transfer. Fill up with padding sequence. 
-		resp += padding(size)
-		
+		resp += padding(num)
+
 		// return response data
 		if size != len(resp) {
 			logger.Printf(logger.WARN, "[sid.cover] DIFF(response:2) = %d\n", len(resp)-size)
