@@ -48,6 +48,8 @@ type Config struct {
 	CtrlAllow string     // addresses allowed for control sessions
 	HttpPort  int        // port for HTTP sessions
 	HttpAllow string     // addresses allowed for HTTP access
+	UseSocks  bool       // Use SOCKS for outgoing connections?
+	SocksAddr string     // SOCKS address
 	Upload    UploadDefs // upload-related settings
 }
 
@@ -75,6 +77,8 @@ var CfgData Config = Config{
 	CtrlAllow: "127.0.0.1", // addresses allowed to connect to control service
 	HttpPort:  80,          // expected port for HTTP connections
 	HttpAllow: "127.0.0.1", // addresses allowed to connect to HTTP server
+	UseSocks:  false,       // Use SOCKS for outgoing connections?
+	SocksAddr: "127.0.0.1:9050", // SOCKS address  
 
 	Upload: UploadDefs{
 		Path:          "./uploads",
@@ -151,12 +155,17 @@ func InitConfig() {
 	network.Delay = 1000000                          // 1ms
 	network.Retries = 1000                           // max. 1s
 	network.Timeout, _ = time.ParseDuration("100us") // 0.1ms
+	proxy := "<None>"
+	if CfgData.UseProxy {
+		proxy = CfgData.SocksAddr
+	}
 
 	// list current configuration data
 	logger.Println(logger.INFO, "[sid.config] !==========< configuration >===============")
-	logger.Println(logger.INFO, "[sid.config] !Configuration file: "+CfgData.CfgFile)
+	logger.Println(logger.INFO, "[sid.config] !       Configuration file: "+CfgData.CfgFile)
 	logger.Println(logger.INFO, "[sid.config] !Port for control sessions: "+strconv.Itoa(CfgData.CtrlPort))
-	logger.Println(logger.INFO, "[sid.config] !Port for HTTP sessions: "+strconv.Itoa(CfgData.HttpPort))
+	logger.Println(logger.INFO, "[sid.config] !   Port for HTTP sessions: "+strconv.Itoa(CfgData.HttpPort))
+	logger.Println(logger.INFO, "[sid.config] !              SOCKS proxy: "+proxy))
 	logger.Println(logger.INFO, "[sid.config] !==========================================")
 }
 
@@ -190,6 +199,10 @@ func callback(mode int, param *parser.Parameter) bool {
 				SetIntValue(&CfgData.HttpPort, param.Value)
 			case "HttpAllow":
 				CfgData.HttpAllow = param.Value
+			case "UseSocks":
+				CfgData.UseSocks = (param.Value == "ON")
+			case "SocksAddr":
+				CfgData.SocksAddr = param.Value
 			case "Path":
 				CfgData.Upload.Path = param.Value
 			case "Keyring":
