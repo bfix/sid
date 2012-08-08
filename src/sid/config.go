@@ -156,7 +156,7 @@ func InitConfig() {
 	network.Retries = 1000                           // max. 1s
 	network.Timeout, _ = time.ParseDuration("100us") // 0.1ms
 	proxy := "<None>"
-	if CfgData.UseProxy {
+	if CfgData.UseSocks {
 		proxy = CfgData.SocksAddr
 	}
 
