@@ -70,14 +70,14 @@ type UploadDefs struct {
  * from all modules/packages of the application.
  */
 var CfgData Config = Config{
-	CfgFile:   "sid.cfg",   // default config file
-	LogFile:   "sid.log",   // default logging file
-	LogState:  false,       // no file-based logging
-	CtrlPort:  2342,        // port for local control service
-	CtrlAllow: "127.0.0.1", // addresses allowed to connect to control service
-	HttpPort:  80,          // expected port for HTTP connections
-	HttpAllow: "127.0.0.1", // addresses allowed to connect to HTTP server
-	UseSocks:  false,       // Use SOCKS for outgoing connections?
+	CfgFile:   "sid.cfg",        // default config file
+	LogFile:   "sid.log",        // default logging file
+	LogState:  false,            // no file-based logging
+	CtrlPort:  2342,             // port for local control service
+	CtrlAllow: "127.0.0.1",      // addresses allowed to connect to control service
+	HttpPort:  80,               // expected port for HTTP connections
+	HttpAllow: "127.0.0.1",      // addresses allowed to connect to HTTP server
+	UseSocks:  false,            // Use SOCKS for outgoing connections?
 	SocksAddr: "127.0.0.1:9050", // SOCKS address  
 
 	Upload: UploadDefs{
@@ -165,7 +165,7 @@ func InitConfig() {
 	logger.Println(logger.INFO, "[sid.config] !       Configuration file: "+CfgData.CfgFile)
 	logger.Println(logger.INFO, "[sid.config] !Port for control sessions: "+strconv.Itoa(CfgData.CtrlPort))
 	logger.Println(logger.INFO, "[sid.config] !   Port for HTTP sessions: "+strconv.Itoa(CfgData.HttpPort))
-	logger.Println(logger.INFO, "[sid.config] !              SOCKS proxy: "+proxy))
+	logger.Println(logger.INFO, "[sid.config] !              SOCKS proxy: "+proxy)
 	logger.Println(logger.INFO, "[sid.config] !==========================================")
 }
 
