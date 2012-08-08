@@ -26,6 +26,7 @@ import (
 	"bufio"
 	"bytes"
 	"gospel/logger"
+	"gospel/network"
 	"net"
 	"strconv"
 	"strings"
@@ -113,15 +114,29 @@ type Cover struct {
  * @return net.Conn - connection to cover server (or nil)
  */
 func (c *Cover) connect() net.Conn {
-	// establish connection
-	addr := c.Name + ":" + strconv.Itoa(c.Port)
-	conn, err := net.Dial("tcp", addr)
-	if err != nil {
-		// can't connect
-		logger.Printf(logger.ERROR, "[sid.cover] failed to connect to cover server: %s\n", err.Error())
-		return nil
+	// establish connection directly or via proxy.
+	var (
+		conn net.Conn
+		err  error
+	)
+	if CfgData.UseSocks {
+		conn, err = network.Socks5Connect("tcp", c.Name, c.Port, CfgData.SocksAddr)
+		if err != nil {
+			// can't connect
+			logger.Printf(logger.ERROR, "[sid.cover] failed to connect to cover server through SOCKS5 proxy: %s\n", err.Error())
+			return nil
+		}
+		logger.Println(logger.INFO, "[sid.cover] connected to cover server through SOCKS5 proxy...")
+	} else {
+		addr := c.Name + ":" + strconv.Itoa(c.Port)
+		conn, err = net.Dial("tcp", addr)
+		if err != nil {
+			// can't connect
+			logger.Printf(logger.ERROR, "[sid.cover] failed to connect to cover server: %s\n", err.Error())
+			return nil
+		}
+		logger.Println(logger.INFO, "[sid.cover] directly connected to cover server...")
 	}
-	logger.Println(logger.INFO, "[sid.cover] connected to cover server...")
 
 	// allocate state information and add to state list
 	// initialize struct with default data
