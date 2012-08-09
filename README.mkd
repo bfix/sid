@@ -77,6 +77,13 @@ Approach
       Server" look exactly like traffic between the "TOR exit node" and the
       "Cover Server"; this way "E" has to believe that "C_n" is talking to
       the cover server by looking at packet timing and size analysis.
+      
+      To enhance security, it is possible to "torify" the cover traffic by
+      sending it across the Tor network to the cover server. Since the cover
+      traffic and the client communication is matched in packet sizes and
+      timing as much as possible, the new Tor trafiic will look like the
+      SID node is an intermediate Tor node for "C_n" (see the COVER_HIDING
+      document).
 
 Additional and detailed information...
 ======================================

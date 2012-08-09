@@ -1,0 +1,71 @@
+
+Effectively hiding cover traffic in SID
+=======================================
+
+Problem description
+-------------------
+
+The current implementation of SID simulates the behavior of a Tor exit
+to hide the communication between a client and SID (running on the Tor
+exit node itself). It does so by generating HTTP cover traffic to a
+cover server what matches the incoming traffic on the TCP packet level
+as much as possible (packet sizes and timing). This should prevent an
+eavesdropper from identifying SID communication based on timing-
+correlation attacks.
+
+To provide maximum protection for the client is is also important that
+an eavesdropper can't identify that the client is actually
+communicating with SID instead of using the "normal" exit node. This
+leaves the current implementation of SID with the following problems:
+
+The eavesdropper can find out easily what cover server is used and what
+kind of content is transferred during the communication. Since the
+cover traffic is (unencrypted) HTTP, an eavesdropper can do deep packet
+inspection on the content of the communication to nail it down. Because
+it is more than unlikely (and preliminary analysis of Tor traffic on an
+exit node confirms it) that enough other clients are using the same Tor
+exit node for the exact same kind of communication, this will easily
+identify a "fake" Tor exit traffic and will therefore identify a client
+talking to SID - exactly what should be prevented...
+
+Solution approach
+-----------------
+
+To prevent an eavesdropper from analyzing the cover traffic, the cover
+traffic is simply "torified" itself, ie. using the local Tor proxy to
+communicate with the cover server. This can either be done by using a
+tool like "torsocks" to handle the Tor proxy communication on our
+behalf or by using the SOCKS5 support in SID itself.  
+
+Security considerations
+-----------------------
+
+How can traffic between a client and SID be identified in this scheme,
+i.e. what information needs to be available to an eavesdropper to do
+nail down the client for communicating with SID?
+
+If the eavesdropper is completely monitoring the Tor exit node traffic
+(incoming and outgoing data), he should not find any suspicious
+mismatch in the traffic itself: all incoming (Tor cell traffic) and
+outgoing (all Tor cell and exit node traffic) should match as best
+as possible. 
+
+There are limited possibilities for the eavesdropper to identity that a
+client is talking to SID instead of using the box as an intermediate
+Tor node:
+
+1. finding evidence that during the circuit building process of the
+   client the SID-related Tor node is not an intermediate, but the exit
+   node. Due to latency and transport timings of other Tor nodes this
+   should be very hard to find out.
+
+2. finding evidence that incoming cell traffic from the client is not
+   forwarded to another Tor (exit) node like it would be by a "real"
+   intermediate Tor node (maybe due to latency and/or detectable
+   differences in fragmentation (packet grouping)).
+
+It is assumed that these (theoretical) chances for an eavesdropper will
+even further decrease if the SID-related Tor node is dedicating a high
+bandwidth (200Mb/s+) and is therefore generating high volume cell
+traffic.
+ 
