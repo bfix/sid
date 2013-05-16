@@ -43,40 +43,29 @@ and hardware environment:
 #### GO1 sub-repositories
 
 With the release of Go1 some code needed by SID has been moved into sub-
-repositories. At least the 'go.crypto' sub-repository must be installed
-locally:
+repositories. I recommend to create a common (shared) directory for all
+Go libraries (in this example I will use /opt/go/libs as that folder) and
+to tell Go where to store, build and install libraries by setting an
+additional environment variable called GOPATH:
 
-	$ cd /opt/go/libs
-	$ mkdir -p sub/code.google.com/p
-	$ cd sub/code.google.com/p
-	$ hg clone https://code.google.com/p/go.crypto
-	$ cd ../..
-	$ go install -v ./... 
+	export GOROOT=/opt/go/libs
 
-Make sure you set a GOPATH variable to the sub-repository:
+	$ mkdir /opt/go/libs
+	$ export GOROOT=/opt/go/libs
+	$ go get code.google.com/p/go.crypto
+	$ go get code.google.com/p/go.net
 
-	$ export GOPATH=/opt/go/libs/sub
-	
-N.B.: If you want to instalkl further Go1 sub-repositories, I recommend to
-put them under the same base directory (/opt/go/libs/sub) so you don't need
-additional GOPATH elments and have all Google GO libraries in one place.
+The last command will dowload the source files, build and install the
+library for later use.
 
 ### GOSPEL
 
 GOSPEL is the "GO SPEcial Library" and an Open-Source project. To install
-the required GOSPEL packages for SID on your computer, you need a working
-*git* installation; then simply issue the following commands:
+the required GOSPEL libraries for SID on your computer, simply issue the
+following commands:
 
-	$ mkdir /opt/go/libs
-	$ cd /opt/go/libs
-	$ git clone git://github.com/bfix/gospel gospel
-	$ cd gospel/src
-	$ make install
+	$ go get github.com/bfix/gospel
 	
-Don't forget to extend the the GOPATH variable to include the GOSPEL project:
-
-	$ export GOPATH=${GOPATH}:/opt/go/libs/gospel 
-
 Building and installing the SID library
 ---------------------------------------
 
@@ -86,5 +75,6 @@ directory and build/install the target:
 	$ cd src
 	$ make install
 
-The compiled SID library can be used by customized SID applications.
+The compiled SID library can be used by customized SID applications. It is
+stored in the (local) folder named "pkg/<platform>/sid.a"
  

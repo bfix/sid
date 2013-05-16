@@ -26,7 +26,7 @@ package sid
 
 import (
 	"bufio"
-	"gospel/logger"
+	"github.com/bfix/gospel/logger"
 	"net"
 	"strings"
 )
@@ -50,7 +50,7 @@ func (c *ControlSrv) Process(client net.Conn) {
 	b := bufio.NewReadWriter(bufio.NewReader(client), bufio.NewWriter(client))
 	for repeat := true; repeat; {
 
-		// show control menu			
+		// show control menu
 		b.WriteString("\n-----------------------------------\n")
 		b.WriteString("Change (L)og level [" + logger.GetLogLevel() + "]\n")
 		b.WriteString("(T)erminate application\n")

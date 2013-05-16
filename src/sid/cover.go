@@ -25,8 +25,8 @@ package sid
 import (
 	"bufio"
 	"bytes"
-	"gospel/logger"
-	"gospel/network"
+	"github.com/bfix/gospel/logger"
+	"github.com/bfix/gospel/network"
 	"net"
 	"strconv"
 	"strings"
@@ -239,7 +239,7 @@ func (c *Cover) xformReq(s *State, data []byte, num int) []byte {
 	targetHost := c.Name // request resource from this host (default)
 	balance := 0         // balance between incoming and outgoing information
 
-	// use identical line break sequence	
+	// use identical line break sequence
 	lb := "\r\n"
 	if strings.Index(inStr, lb) == -1 {
 		lb = "\n"
@@ -361,7 +361,7 @@ func (c *Cover) xformReq(s *State, data []byte, num int) []byte {
 		case strings.HasPrefix(line, "Host: "):
 			// split line into parts
 			parts := strings.Split(line, " ")
-			// replace hostname reference 
+			// replace hostname reference
 			logger.Printf(logger.DBG_HIGH, "[sid.cover] Host replaced with '%s'\n", targetHost)
 			req += "Host: " + targetHost + lb
 			// keep track of balance
@@ -372,7 +372,7 @@ func (c *Cover) xformReq(s *State, data []byte, num int) []byte {
 		// "Accept-Language: de-de,de;q=0.8,en-us;q=0.5,en;q=0.3"
 		//---------------------------------------------------------
 		//case s.ReqBalance != 0 && strings.HasPrefix (line, "Accept-Language: "):
-		// @@@TODO: Is this the right place to balance the translation? 
+		// @@@TODO: Is this the right place to balance the translation?
 
 		//---------------------------------------------------------
 		// Acceptable content encoding: we only want plain HTML
@@ -474,7 +474,7 @@ func (c *Cover) xformReq(s *State, data []byte, num int) []byte {
 			req += repl + lb
 
 		//---------------------------------------------------------
-		// add unchanged request lines. 
+		// add unchanged request lines.
 		//---------------------------------------------------------
 		default:
 			req += line
@@ -508,7 +508,7 @@ func (c *Cover) xformReq(s *State, data []byte, num int) []byte {
 		}
 
 		if s.ReqMode == REQ_POST {
-			// switch state			
+			// switch state
 			s.ReqState = RS_CONTENT
 		} else {
 			// we are done
@@ -625,7 +625,7 @@ func (c *Cover) xformResp(s *State, data []byte, num int) []byte {
 	// initial response package
 	if s.RespMode == 0 {
 
-		// use identical line break sequence	
+		// use identical line break sequence
 		lb := "\r\n"
 		if strings.Index(inStr, lb) == -1 {
 			lb = "\n"
@@ -710,11 +710,11 @@ func (c *Cover) xformResp(s *State, data []byte, num int) []byte {
 		num -= len(resp)
 	}
 
-	// start of HTML response?	
+	// start of HTML response?
 	if s.RespMode == 0 {
 		//-------------------------------------------------------------
-		// start HTML response		
-		//-------------------------------------------------------------		
+		// start HTML response
+		//-------------------------------------------------------------
 		if strings.HasPrefix(s.RespType, "text/html") {
 			// start of a new HTML response. Use pre-defined HTML page
 			// to initialize response.
@@ -728,8 +728,8 @@ func (c *Cover) xformResp(s *State, data []byte, num int) []byte {
 
 	switch {
 	//-------------------------------------------------------------
-	// assemble HTML response		
-	//-------------------------------------------------------------		
+	// assemble HTML response
+	//-------------------------------------------------------------
 	case strings.HasPrefix(s.RespType, "text/html"):
 		// do content translation (collect resource tags)
 		done := parseHTML(rdr, s.RespHdr, s.RespTags, s.RespXtra)
@@ -739,7 +739,7 @@ func (c *Cover) xformResp(s *State, data []byte, num int) []byte {
 			c.SyncCover(c, s)
 		}
 
-		// start of HTML?		
+		// start of HTML?
 		if s.RespMode == 1 {
 			// initial HTML sequence
 			resp += htmlIntro
@@ -766,7 +766,7 @@ func (c *Cover) xformResp(s *State, data []byte, num int) []byte {
 			num -= len(htmlOutro)
 		}
 		// we are done with this response packer, but have still response
-		// data to transfer. Fill up with padding sequence. 
+		// data to transfer. Fill up with padding sequence.
 		resp += padding(num)
 
 		// return response data
@@ -779,7 +779,7 @@ func (c *Cover) xformResp(s *State, data []byte, num int) []byte {
 	//-------------------------------------------------------------
 	// Images: Images are considered harmless, so we simply
 	// pass them back to the client.
-	//-------------------------------------------------------------		
+	//-------------------------------------------------------------
 	case strings.HasPrefix(s.RespType, "image/"):
 		logger.Println(logger.DBG, "[sid.cover] Image data passed to client")
 		return data[0:size]
@@ -788,7 +788,7 @@ func (c *Cover) xformResp(s *State, data []byte, num int) []byte {
 	// JavaScript: Simply replace any JavaScript content with
 	// spaces (looks like the client browser has disabled
 	// JavaScript).
-	//-------------------------------------------------------------		
+	//-------------------------------------------------------------
 	case strings.HasPrefix(s.RespType, "application/x-javascript"):
 		// padding to requested size
 		for n := 0; n < num; n++ {
@@ -805,7 +805,7 @@ func (c *Cover) xformResp(s *State, data []byte, num int) []byte {
 	// CSS: Simply replace any style sheets with spaces. No image
 	// references in CSS are parsed (looks like those are cached
 	// resources to an eavesdropper)
-	//-------------------------------------------------------------		
+	//-------------------------------------------------------------
 	case strings.HasPrefix(s.RespType, "text/css"):
 		// padding to requested size
 		for n := 0; n < num; n++ {

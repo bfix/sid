@@ -23,7 +23,7 @@ package sid
 // Import external declarations.
 
 import (
-	"gospel/crypto"
+	"github.com/bfix/gospel/crypto"
 	"io"
 	"os"
 )
@@ -63,7 +63,7 @@ func ProcessFile(fname string, chunkSize int, hdlr func(data []byte) bool) error
  */
 func ProcessStream(rdr io.Reader, chunkSize int, hdlr func(data []byte) bool) error {
 
-	// process file	
+	// process file
 	data := make([]byte, chunkSize)
 	for {
 		// read next chunk

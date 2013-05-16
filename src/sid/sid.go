@@ -5,7 +5,7 @@
  * Start-up connection handlers for HTTP, HTTPS and control services.
  * Parameters are defined in a configuration file or defined/overridden
  * directly on the command line; some of the parameters  can later be
- * modified using the local control service.  
+ * modified using the local control service.
  *
  * (c) 2012 Bernd Fix   >Y<
  *
@@ -29,8 +29,8 @@ package sid
 // Import external declarations.
 
 import (
-	"gospel/logger"
-	"gospel/network"
+	"github.com/bfix/gospel/logger"
+	"github.com/bfix/gospel/network"
 	"strconv"
 )
 
@@ -68,11 +68,11 @@ func Startup() {
 	// '-c <file>' option on the command line. If no configuration file
 	// exists, default values for all config options are used.
 	// Configuration options used on the command line will override
-	// options defined in the config file (or default options). 
+	// options defined in the config file (or default options).
 	//-----------------------------------------------------------------
 
 	// handle configuration file and command line options
-	// (turns on file-based logging if specified on command line) 
+	// (turns on file-based logging if specified on command line)
 	InitConfig()
 
 	//-----------------------------------------------------------------

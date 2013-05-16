@@ -26,9 +26,9 @@ package sid
 import (
 	"bufio"
 	"flag"
-	"gospel/logger"
-	"gospel/network"
-	"gospel/parser"
+	"github.com/bfix/gospel/logger"
+	"github.com/bfix/gospel/network"
+	"github.com/bfix/gospel/parser"
 	"os"
 	"strconv"
 	"time"
@@ -78,7 +78,7 @@ var CfgData Config = Config{
 	HttpPort:  80,               // expected port for HTTP connections
 	HttpAllow: "127.0.0.1",      // addresses allowed to connect to HTTP server
 	UseSocks:  false,            // Use SOCKS for outgoing connections?
-	SocksAddr: "127.0.0.1:9050", // SOCKS address  
+	SocksAddr: "127.0.0.1:9050", // SOCKS address
 
 	Upload: UploadDefs{
 		Path:          "./uploads",
@@ -102,7 +102,7 @@ var CustomConfigHandler parser.Callback = nil
  */
 func InitConfig() {
 
-	// process command line arguments	
+	// process command line arguments
 	CfgData.CfgFile = *flag.String("c", CfgData.CfgFile, "configuration file")
 	flag.String("L", CfgData.LogFile, "logfile name")
 	flag.Bool("l", CfgData.LogState, "file-based logging")
@@ -172,7 +172,7 @@ func InitConfig() {
 //---------------------------------------------------------------------
 /*
  * Handle callback from parser.
- * @param mode int - parameter mode 
+ * @param mode int - parameter mode
  * @param param *Parameter - reference to new parameter
  * @return bool - successful operation?
  */

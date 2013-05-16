@@ -33,8 +33,8 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"encoding/hex"
-	"gospel/crypto"
-	"gospel/logger"
+	"github.com/bfix/gospel/crypto"
+	"github.com/bfix/gospel/logger"
 	"io"
 	"math/big"
 	"os"
@@ -141,7 +141,7 @@ func PostprocessUploadData(data []byte) bool {
 		// encrypt client document into file
 		//-----------------------------------------------------------------
 
-		// open file for output 
+		// open file for output
 		fname := baseName + ".document.aes256"
 		if wrt, err = os.OpenFile(fname, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0666); err != nil {
 			logger.Printf(logger.ERROR, "[sid.upload] Can't create document file '%s'\n", fname)
@@ -180,7 +180,7 @@ func PostprocessUploadData(data []byte) bool {
 				wrt.Close()
 				continue
 			}
-			// encrypt share to file	
+			// encrypt share to file
 			recipient[0] = ent
 			if pt, err = openpgp.Encrypt(ct, recipient, nil, nil, nil); err != nil {
 				logger.Printf(logger.ERROR, "[sid.upload] Can't create encrypter: %s\n", err.Error())

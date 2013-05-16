@@ -23,8 +23,8 @@ package sid
 // Import external declarations.
 
 import (
-	"exp/html"
-	"gospel/logger"
+	"code.google.com/p/go.net/html"
+	"github.com/bfix/gospel/logger"
 	"io"
 	"strings"
 )
@@ -255,7 +255,7 @@ loop:
 			continue loop
 		}
 
-		// post-process tag and add to appropriate tag list		
+		// post-process tag and add to appropriate tag list
 		switch {
 		case tag.name == "img":
 			// add/replace dimensions
@@ -383,7 +383,7 @@ func getAttrs(tk *html.Tokenizer) (list map[string]string) {
 /*
  * Generate HTML padding sequence.
  * @param size int - length of padding sequence
- * @return string - padding sequence 
+ * @return string - padding sequence
  */
 func padding(size int) string {
 	// small paddings are simple spaces...
@@ -420,7 +420,7 @@ func errorBody(severe bool) string {
 
 //=====================================================================
 /*
- * Translate URI (external <-> local): 
+ * Translate URI (external <-> local):
  * Any URI of the form "<scheme>://<server>/<path>/<to>/<resource...>"
  * is transformed to an absolute path on on the sending server (that is
  * the SID instance) that can later be translated back to its original

@@ -6,14 +6,9 @@ ifneq ($(shell basename $(PWD)), src)
 $(error Not in source directory - you are here: '${PWD}')
 endif
 
-ifneq ($(strip $(GOPATH)),)
-GOPATH := ${GOPATH}:$(BASE)
-else
-GOPATH := $(BASE)
-endif
-
 install:	fmt
-	GOPATH=$(GOPATH) go install -v ./...
+	go build -o ../bin/dcd dcd/dcd.go
+	GOPATH=${PWD}/..:${GOPATH} go install sid
 
 test:
 	go test ./...

@@ -26,8 +26,8 @@ package sid
 // Import external declarations.
 
 import (
-	"gospel/logger"
-	"gospel/network"
+	"github.com/bfix/gospel/logger"
+	"github.com/bfix/gospel/network"
 	"net"
 	"strings"
 )

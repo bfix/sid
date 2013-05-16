@@ -28,7 +28,7 @@ import (
 	"crypto/cipher"
 	"flag"
 	"fmt"
-	"gospel/crypto"
+	"github.com/bfix/gospel/crypto"
 	"io"
 	"math/big"
 	"os"
